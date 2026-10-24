@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 deep-translator>=1.11.4
 edge-tts>=7.3.0
 gTTS>=2.5.0
@@ -9,3 +10,17 @@ reportlab>=5.1.0
 streamlit>=1.59.0
 requests>=2.32.0
 tqdm>=4.67.0
+=======
+pymupdf>=2.0.0
+python-docx>=1.2.0
+pydantic>=2.7.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+pytesseract>=0.3.10
+Pillow>=10.0.0
+pytest>=8.0.0
+pytest-cov>=4.0.0
+chromadb>=0.5.0
+rank_bm25>=0.2.2
+numpy>=1.24.0
+>>>>>>> f0ba063179223ff8b809b3e9d1327ef7cf1a7dea
