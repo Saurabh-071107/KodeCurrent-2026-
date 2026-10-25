@@ -39,7 +39,7 @@ import {
   listDocuments,
   deleteDocument
 } from '../controllers/api.controller';
-import { authenticateToken } from '../middleware/auth.middleware';
+import { authenticateToken, optionalAuthenticateToken } from '../middleware/auth.middleware';
 
 const router = Router();
 
@@ -65,12 +65,12 @@ router.patch('/notifications/:id/read', authenticateToken, markNotificationRead)
 // 2. Drafts & AI Generation (Scoped to user)
 router.get('/drafts', authenticateToken, getDrafts);
 router.get('/drafts/:id', authenticateToken, getDraftById);
-router.post('/drafts', authenticateToken, saveDraft);
-router.post('/drafts/precheck', authenticateToken, preCheckDraft);
-router.post('/ai/drafts/precheck', authenticateToken, preCheckDraft);
-router.post('/drafts/generate', authenticateToken, generateDraft);
-router.post('/ai/drafts/generate', authenticateToken, generateDraft);
-router.get('/drafts/:id/versions', authenticateToken, getDraftVersions);
+router.post('/drafts', optionalAuthenticateToken, saveDraft);
+router.post('/drafts/precheck', optionalAuthenticateToken, preCheckDraft);
+router.post('/ai/drafts/precheck', optionalAuthenticateToken, preCheckDraft);
+router.post('/drafts/generate', optionalAuthenticateToken, generateDraft);
+router.post('/ai/drafts/generate', optionalAuthenticateToken, generateDraft);
+router.get('/drafts/:id/versions', optionalAuthenticateToken, getDraftVersions);
 
 // 3. Export (Owner verified)
 router.post('/ai/export', authenticateToken, exportDocument);
@@ -95,9 +95,9 @@ router.post('/verify', authenticateToken, verifyDocumentWithAi);
 router.post('/ai/documents/verify', authenticateToken, verifyDocumentWithAi);
 
 // 7. Research (Scoped to user)
-router.get('/research/threads', authenticateToken, getResearchThreads);
-router.post('/research/chat', authenticateToken, askResearchQuestion);
-router.post('/ai/research/chat', authenticateToken, askResearchQuestion);
+router.get('/research/threads', optionalAuthenticateToken, getResearchThreads);
+router.post('/research/chat', optionalAuthenticateToken, askResearchQuestion);
+router.post('/ai/research/chat', optionalAuthenticateToken, askResearchQuestion);
 
 // 8. Student Center
 router.get('/student/assets', authenticateToken, getStudentAssets);

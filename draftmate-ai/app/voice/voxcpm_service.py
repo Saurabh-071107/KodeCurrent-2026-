@@ -77,11 +77,12 @@ def synthesize_speech_locally(
             import torch
 
             logger.info("voxcpm_synthesis_running", text_len=len(text), timesteps=inference_timesteps)
+            if seed is not None:
+                torch.manual_seed(seed)
             wav = model.generate(
                 text=text,
                 cfg_value=cfg_value,
-                inference_timesteps=inference_timesteps,
-                seed=seed
+                inference_timesteps=inference_timesteps
             )
             sample_rate = getattr(model.tts_model, "sample_rate", 24000)
             sf.write(str(output_path), wav, sample_rate)

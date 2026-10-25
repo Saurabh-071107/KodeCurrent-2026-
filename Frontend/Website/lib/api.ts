@@ -189,6 +189,43 @@ export const api = {
     }
   },
 
+  generateDraft: async (payload: {
+    documentType?: string;
+    facts?: any;
+    templateId?: string;
+    customInstructions?: string;
+    jurisdiction?: string;
+    isDemo?: boolean;
+  }): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/drafts/generate`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  chatAssistant: async (payload: {
+    question: string;
+    context?: string;
+    isDemo?: boolean;
+  }): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/research/chat`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
   // --- Case Tracker ---
   getCases: async (query?: string, cnr?: string): Promise<ApiResponse> => {
     try {

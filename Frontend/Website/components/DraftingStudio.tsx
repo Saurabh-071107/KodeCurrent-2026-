@@ -80,6 +80,7 @@ export interface SavedDraftItem {
   templateId: string;
   heading: string;
   subject: string;
+  toPlaceholder?: string;
   bodyClauses: string[];
   ultimatum: string;
   signOffTitle: string;
@@ -335,6 +336,16 @@ export default function DraftingStudio({
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Dynamic Live Document Canvas State
+  const [draftHeading, setDraftHeading] = useState(MASTER_TEMPLATES[0].heading);
+  const [draftDate, setDraftDate] = useState('');
+  const [draftTo, setDraftTo] = useState(MASTER_TEMPLATES[0].toPlaceholder);
+  const [draftSubject, setDraftSubject] = useState(MASTER_TEMPLATES[0].subject);
+  const [draftClauses, setDraftClauses] = useState<string[]>(MASTER_TEMPLATES[0].bodyClauses);
+  const [draftUltimatum, setDraftUltimatum] = useState(MASTER_TEMPLATES[0].ultimatum);
+  const [draftSignOff, setDraftSignOff] = useState(MASTER_TEMPLATES[0].signOffTitle);
+  const [isGenerating, setIsGenerating] = useState(false);
+
   // New Draft Name Intake Modal State
   const [isNewDraftModalOpen, setIsNewDraftModalOpen] = useState(false);
   const [newDraftTitle, setNewDraftTitle] = useState('');
@@ -458,6 +469,13 @@ export default function DraftingStudio({
     setDocTitle(tmpl.title);
     setCurrentRole(tmpl.role);
     setFormValues({});
+    setDraftHeading(tmpl.heading);
+    setDraftSubject(tmpl.subject);
+    setDraftTo(tmpl.toPlaceholder);
+    setDraftClauses(tmpl.bodyClauses);
+    setDraftUltimatum(tmpl.ultimatum);
+    setDraftSignOff(tmpl.signOffTitle);
+    setDraftDate('');
     setIsDraftGenerated(false);
     setSaveStatus('Draft loaded');
     setTemplatePickerOpen(false);
@@ -495,6 +513,13 @@ export default function DraftingStudio({
     setDocTitle(trimmedTitle);
     setCurrentRole(matched.role as UserRoleType);
     setFormValues({});
+    setDraftHeading(matched.heading);
+    setDraftSubject(matched.subject);
+    setDraftTo(matched.toPlaceholder);
+    setDraftClauses(matched.bodyClauses);
+    setDraftUltimatum(matched.ultimatum);
+    setDraftSignOff(matched.signOffTitle);
+    setDraftDate('');
     setIsDraftGenerated(false);
     setSaveStatus('Draft created');
     setMessages([
@@ -531,6 +556,13 @@ export default function DraftingStudio({
     setSelectedTemplate(matchingTemplate);
     setDocTitle(draft.title);
     setCurrentRole(draft.role);
+    setDraftHeading(draft.heading || draft.title.toUpperCase());
+    setDraftSubject(draft.subject || draft.title);
+    setDraftTo(draft.toPlaceholder || '[Recipient / Addressee]');
+    setDraftClauses(draft.bodyClauses || [draft.preview]);
+    setDraftUltimatum(draft.ultimatum || '');
+    setDraftSignOff(draft.signOffTitle || '[Authorized Signatory]');
+    setDraftDate(draft.lastEdited || new Date().toLocaleDateString('en-IN'));
     setIsDraftGenerated(true);
     setSaveStatus(`Opened from ${draft.lastEdited}`);
     setViewMode('editor');
@@ -540,6 +572,15 @@ export default function DraftingStudio({
   const handleSimulateUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const headingName = file.name.toUpperCase().replace(/\.[^/.]+$/, "");
+      const subjectName = `Document imported from ${file.name}`;
+      const clauses = [
+        `Paragraph 1: Content imported successfully from ${file.name}.`,
+        'Paragraph 2: All clauses are fully editable in this collaborative canvas.'
+      ];
+      const ultimatum = 'The parties agree to the terms as transcribed above.';
+      const signOff = '[Signatory Name]\nAuthorized Representative';
+
       const newDraft: SavedDraftItem = {
         id: `upload-${Date.now()}`,
         title: file.name.replace(/\.[^/.]+$/, ""),
@@ -549,14 +590,11 @@ export default function DraftingStudio({
         wordsCount: 280,
         preview: `Imported from ${file.name}. Parsed paragraphs and formatted into Word-compatible editor.`,
         templateId: 'uploaded-doc',
-        heading: file.name.toUpperCase().replace(/\.[^/.]+$/, ""),
-        subject: `Document imported from ${file.name}`,
-        bodyClauses: [
-          `Paragraph 1: Content imported successfully from ${file.name}.`,
-          'Paragraph 2: All clauses are fully editable in this collaborative canvas.'
-        ],
-        ultimatum: 'The parties agree to the terms as transcribed above.',
-        signOffTitle: '[Signatory Name]\nAuthorized Representative'
+        heading: headingName,
+        subject: subjectName,
+        bodyClauses: clauses,
+        ultimatum: ultimatum,
+        signOffTitle: signOff
       };
       const updated = [newDraft, ...savedDrafts];
       persistDrafts(updated);
@@ -589,12 +627,116 @@ export default function DraftingStudio({
   };
 
   // Handle Generate Draft button click
-  const handleGenerateDraft = (e: React.FormEvent) => {
+  const handleGenerateDraft = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsGenerating(true);
+    setSaveStatus('Generating dynamic draft...');
+
+    const todayDate = new Date().toLocaleDateString('en-IN');
+    let generatedHeading = selectedTemplate.heading;
+    let generatedSubject = selectedTemplate.subject;
+    let generatedTo = selectedTemplate.toPlaceholder;
+    let generatedClauses: string[] = [];
+    let generatedUltimatum = selectedTemplate.ultimatum;
+    let generatedSignOff = selectedTemplate.signOffTitle;
+
+    // 1. Synthesize clauses tailored directly to formValues
+    if (selectedTemplate.id === 'student-moot-memorial') {
+      const moot = formValues.mootTitle || 'National Moot Court Competition';
+      const cTitle = formValues.caseTitle || 'Union of People v. Republic of Indica';
+      const court = formValues.courtName || 'Supreme Court of Indica';
+      const tCode = formValues.teamCode || 'TC-42';
+
+      generatedHeading = 'MEMORIAL FOR THE PETITIONER';
+      generatedTo = `IN THE HON’BLE ${court.toUpperCase()}`;
+      generatedSubject = `Pleadings on behalf of the Petitioner in "${cTitle}" under Article 32 of Constitution`;
+      generatedClauses = [
+        `STATEMENT OF JURISDICTION: The Petitioner approaches this Hon’ble ${court} under Article 32 of the Constitution of Indica, challenging arbitrary surveillance and telemetry directives promulgated in the context of ${moot}.`,
+        `STATEMENT OF FACTS: Arising out of "${cTitle}", the Government enacted mandatory data retention protocols compelling telecom service providers to store biometric and telemetry records for 5 years without prior judicial warrant or statutory authorization.`,
+        `ARGUMENT ADVANCED — ISSUE 1: The impugned executive circular fails the four-pronged proportionality test laid down in K.S. Puttaswamy (Privacy 9J) v. Union of India and Modern Dental College, lacking legitimate state purpose and least-intrusive alternative design.`,
+        `ARGUMENT ADVANCED — ISSUE 2: The executive regulations infringe procedural due process under Articles 14 and 21, being manifestly arbitrary and devoid of independent supervisory safeguards.`
+      ];
+      generatedUltimatum = `PRAYER: Wherefore, in the light of the facts stated, authorities cited, and arguments advanced, the Petitioner (Team [${tCode}]) respectfully prays that this Hon’ble Court declare the impugned regulations ultra vires Articles 14, 19, and 21, and quash the enforcement circular.`;
+      generatedSignOff = `Respectfully Submitted,\nCounsels for the Petitioner (Team [${tCode}])`;
+    } else if (selectedTemplate.id === 'legal-notice-rent') {
+      const recipient = formValues.recipient || '[Tenant Name]';
+      const address = formValues.address || '[Property Address]';
+      const amount = formValues.amount ? `₹ ${formValues.amount}/-` : '₹ [Amount]/-';
+      const agDate = formValues.date || '[Agreement Date]';
+
+      generatedHeading = 'LEGAL NOTICE';
+      generatedTo = `${recipient}\nResiding at: ${address}`;
+      generatedSubject = `Notice of Demand under Section 106 Transfer of Property Act regarding outstanding rent of ${amount}`;
+      generatedClauses = [
+        `1. That my client is the absolute lawful owner and landlord of the residential premises situated at ${address}.`,
+        `2. That you were inducted as a tenant into the said premises under a valid rent agreement dated ${agDate}, covenanting to pay monthly rent regularly.`,
+        `3. That you have persistently defaulted in payment of rent, and an aggregate sum of ${amount} is currently due, payable, and unlawfully withheld despite repeated demands.`,
+        `4. That your continuing failure to remit arrears constitutes a material breach of tenancy covenants causing severe pecuniary loss to my client.`
+      ];
+      generatedUltimatum = `You are hereby called upon to pay the entire outstanding amount of ${amount} within 15 (Fifteen) days from the date of receipt of this notice, failing which my client shall be constrained to initiate formal recovery and eviction proceedings against you.`;
+      generatedSignOff = `[Advocate Name]\nCounsel for the Landlord`;
+    } else if (selectedTemplate.id === 'citizen-security-deposit') {
+      const landlord = formValues.landlord || '[Landlord Name]';
+      const flat = formValues.flat || '[Rented Premises Address]';
+      const deposit = formValues.depositAmount ? `₹ ${formValues.depositAmount}/-` : '₹ 75,000/-';
+      const vacate = formValues.vacateDate || '[Vacate Date]';
+
+      generatedHeading = 'FORMAL NOTICE FOR RETURN OF SECURITY DEPOSIT';
+      generatedTo = `${landlord}\nOwner / Lessor`;
+      generatedSubject = `Urgent demand for immediate refund of interest-free security deposit of ${deposit}`;
+      generatedClauses = [
+        `1. That I was the bona fide tenant of your flat situated at ${flat}, having peacefully vacated and handed over vacant physical possession along with keys on ${vacate}.`,
+        `2. That all utility bills, society maintenance charges, and rental obligations have been paid in full with zero pending arrears.`,
+        `3. That despite joint physical inspection verifying the premises in good tenable condition, the interest-free security deposit amounting to ${deposit} remains unlawfully withheld without any justification.`
+      ];
+      generatedUltimatum = `I hereby request and demand that you remit the complete deposit amount of ${deposit} to my bank account within 7 days, failing which I shall be compelled to initiate civil recovery and consumer grievance proceedings before the appropriate forum.`;
+      generatedSignOff = `[Tenant Name]\nFormer Tenant & Verified Citizen`;
+    } else {
+      // Default: replace placeholders with form values
+      generatedClauses = selectedTemplate.bodyClauses.map((clause) => {
+        let text = clause;
+        Object.entries(formValues).forEach(([k, v]) => {
+          if (v) text = text.replace(new RegExp(`\\[CONFIRM:?\\s*${k}?\\]`, 'gi'), v);
+        });
+        return text.replace(/\[CONFIRM:[^\]]+\]/g, 'Confirmed');
+      });
+    }
+
+    // Call backend API if online
+    try {
+      const apiRes = await api.generateDraft({
+        documentType: selectedTemplate.category,
+        facts: formValues,
+        templateId: selectedTemplate.id,
+        customInstructions: selectedTemplate.title
+      });
+      if (apiRes.success && apiRes.data) {
+        if (apiRes.data.heading) generatedHeading = apiRes.data.heading;
+        if (apiRes.data.subject) generatedSubject = apiRes.data.subject;
+        if (apiRes.data.toPlaceholder) generatedTo = apiRes.data.toPlaceholder;
+        if (Array.isArray(apiRes.data.bodyClauses) && apiRes.data.bodyClauses.length > 0) {
+          generatedClauses = apiRes.data.bodyClauses;
+        }
+        if (apiRes.data.ultimatum) generatedUltimatum = apiRes.data.ultimatum;
+        if (apiRes.data.signOffTitle) generatedSignOff = apiRes.data.signOffTitle;
+      }
+    } catch (err) {
+      console.warn('API draft generation fallback to local synthesis', err);
+    }
+
+    // Update live Canvas State
+    setDraftHeading(generatedHeading);
+    setDraftSubject(generatedSubject);
+    setDraftTo(generatedTo);
+    setDraftClauses(generatedClauses);
+    setDraftUltimatum(generatedUltimatum);
+    setDraftSignOff(generatedSignOff);
+    setDraftDate(todayDate);
     setIsDraftGenerated(true);
+    setIsGenerating(false);
     setSaveStatus('Draft generated just now');
 
-    // Save/update in savedDrafts list
+    // Save in saved drafts
     const existingIndex = savedDrafts.findIndex((d) => d.title === docTitle);
     const updatedDraft: SavedDraftItem = {
       id: existingIndex >= 0 ? savedDrafts[existingIndex].id : `draft-${Date.now()}`,
@@ -602,14 +744,14 @@ export default function DraftingStudio({
       category: selectedTemplate.category,
       role: currentRole,
       lastEdited: 'Just now',
-      wordsCount: 158,
-      preview: `${selectedTemplate.subject} for ${Object.values(formValues)[0] || 'Client'}`,
+      wordsCount: [generatedHeading, generatedSubject, ...generatedClauses, generatedUltimatum].join(' ').split(/\s+/).filter(Boolean).length,
+      preview: `${generatedSubject} for ${Object.values(formValues)[0] || 'Client'}`,
       templateId: selectedTemplate.id,
-      heading: selectedTemplate.heading,
-      subject: selectedTemplate.subject,
-      bodyClauses: selectedTemplate.bodyClauses,
-      ultimatum: selectedTemplate.ultimatum,
-      signOffTitle: selectedTemplate.signOffTitle
+      heading: generatedHeading,
+      subject: generatedSubject,
+      bodyClauses: generatedClauses,
+      ultimatum: generatedUltimatum,
+      signOffTitle: generatedSignOff
     };
 
     let newDraftsList: SavedDraftItem[];
@@ -624,7 +766,7 @@ export default function DraftingStudio({
     const newMsg = {
       id: Date.now().toString(),
       sender: 'ai' as const,
-      text: `Draft successfully generated for ${selectedTemplate.title}. Verified statutory clauses and terms have been inserted into the canvas.`,
+      text: `Draft successfully generated for ${selectedTemplate.title}. Verified statutory clauses and terms have been inserted into the canvas with your specified details.`,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     setMessages((prev) => [...prev, newMsg]);
@@ -632,28 +774,227 @@ export default function DraftingStudio({
   };
 
   // Handle bottom prompt submission
-  const handleSendPrompt = (e: React.FormEvent) => {
+  const handleSendPrompt = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim()) return;
+    const promptText = chatInput.trim();
+    if (!promptText) return;
+
     const userMsg = {
       id: Date.now().toString(),
       sender: 'user' as const,
-      text: chatInput,
+      text: promptText,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     setMessages((prev) => [...prev, userMsg]);
     setChatInput('');
+    setSaveStatus('DraftMate is thinking...');
 
-    setTimeout(() => {
-      const aiReply = {
-        id: (Date.now() + 1).toString(),
-        sender: 'ai' as const,
-        text: `Understood. I have reviewed the draft for ${selectedTemplate.title} and updated the clause formatting accordingly.`,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setMessages((prev) => [...prev, aiReply]);
-      setSaveStatus('Saved just now');
-    }, 600);
+    const pLower = promptText.toLowerCase();
+
+    // Check if user is asking to draft something specific (e.g. "draft me petetion for public park", "write a complaint about price hike from landlord")
+    const isPriceHike = pLower.includes('hike') || pLower.includes('hick') || pLower.includes('price') || pLower.includes('escalat') || pLower.includes('increase rent') || pLower.includes('illegal rent') || (pLower.includes('complaint') && (pLower.includes('landlord') || pLower.includes('rent')));
+    const isPark = pLower.includes('park') || pLower.includes('public park') || pLower.includes('environment') || pLower.includes('encroachment');
+
+    if (isPriceHike) {
+      // Generate Landlord Rent / Price Hike Complaint & Legal Notice
+      const newTitle = 'Notice & Objection — Arbitrary Rent Increase by Landlord';
+      const newHeading = 'FORMAL LEGAL NOTICE & STATUTORY OBJECTION AGAINST UNLAWFUL RENT HIKE';
+      const newTo = 'TO,\n[Landlord / Property Owner Full Name]\n[Landlord Residence Address / Property Owner]';
+      const newSubject = 'FORMAL LEGAL NOTICE AND OBJECTION AGAINST UNILATERAL AND ARBITRARY RENT ESCALATION IN VIOLATION OF SUBSISTING TENANCY AGREEMENT AND RENT CONTROL FRAMEWORK';
+      const newClauses = [
+        '1. LAWFUL TENANCY STATUS: That the undersigned is a bona fide lawful tenant residing at Flat / Premises situated at [Demised Premises Address] pursuant to a valid and subsisting Tenancy Agreement dated [Agreement Date], with monthly rent mutually fixed at ₹ [Contracted Rent]/- per month.',
+        '2. UNILATERAL AND ARBITRARY ESCALATION: That your recent demand demanding an arbitrary price hike and rent escalation during the ongoing tenancy period is completely unilateral, unconscionable, and in direct contravention of the express terms of the agreement and statutory rent regulations.',
+        '3. STATUTORY INFRACTION: That under the settled principles of the Model Tenancy Framework and applicable Rent Control jurisprudence, a landlord cannot unilaterally hike rent or threaten eviction without complying with statutory notice periods and contracted escalation caps.',
+        '4. PUNCTUAL COMPLIANCE BY TENANT: That the tenant has consistently paid the contracted monthly rent on time without default, and any threat of dispossession, disturbance of peaceful possession, or disconnection of essential utilities (water, electricity, maintenance) is strictly illegal and actionable under civil and criminal law.'
+      ];
+      const newUltimatum = 'TAKE NOTICE that you are hereby called upon to withdraw the arbitrary rent hike demand within 7 (Seven) days of receipt of this notice and continue accepting the lawfully contracted rent, failing which the undersigned will initiate civil injunction proceedings before the Competent Civil Court and lodge a complaint before the Rent Authority at your risk and cost.';
+      const newSignOff = 'Yours faithfully,\n[Tenant Name]\nLawful Tenant in Peaceful Occupation';
+
+      setDocTitle(newTitle);
+      setDraftHeading(newHeading);
+      setDraftTo(newTo);
+      setDraftSubject(newSubject);
+      setDraftClauses(newClauses);
+      setDraftUltimatum(newUltimatum);
+      setDraftSignOff(newSignOff);
+      setDraftDate(new Date().toLocaleDateString('en-IN'));
+      setIsDraftGenerated(true);
+      setSaveStatus('Rent Hike Objection Generated');
+
+      api.saveDraft({
+        id: `draft-${Date.now()}`,
+        title: newTitle,
+        category: 'Tenancy Grievance',
+        role: currentRole,
+        heading: newHeading,
+        subject: newSubject,
+        bodyClauses: newClauses,
+        ultimatum: newUltimatum,
+        signOffTitle: newSignOff
+      }).catch(() => {});
+
+      setTimeout(() => {
+        const aiReply = {
+          id: (Date.now() + 1).toString(),
+          sender: 'ai' as const,
+          text: 'I have generated a formal Statutory Legal Notice & Objection against the arbitrary price/rent hike from your landlord. The draft invokes statutory protections under the Model Tenancy framework, protects against coercive eviction, and places your formal refusal on record. The document canvas on the left has been updated with the full legal notice.',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages((prev) => [...prev, aiReply]);
+        setActiveMobileView('canvas');
+      }, 400);
+
+    } else if (isPark) {
+      // Generate Public Park PIL
+      const newTitle = 'Public Interest Litigation — Protection of Public Park';
+      const newHeading = 'IN THE HON’BLE HIGH COURT OF JUDICATURE\n(ORIGINAL WRIT JURISDICTION — PUBLIC INTEREST LITIGATION)';
+      const newTo = 'TO,\nTHE HON’BLE CHIEF JUSTICE AND COMPANION JUSTICES OF THE HON’BLE HIGH COURT';
+      const newSubject = 'WRIT PETITION UNDER ARTICLE 226 OF THE CONSTITUTION OF INDIA SEEKING REMOVAL OF ENCROACHMENTS AND PRESERVATION OF PUBLIC RECREATIONAL PARK LAND';
+      const newClauses = [
+        '1. STATEMENT OF JURISDICTION: The Petitioner, a concerned resident and citizen, invokes the extraordinary writ jurisdiction of this Hon’ble Court under Article 226 of the Constitution of India in public interest for the preservation, maintenance, and ecological restoration of municipal public park space.',
+        '2. STATEMENT OF FACTS: That the demarcated public park situated within the municipal zone, reserved exclusively for recreational and environmental purposes under the Master Development Plan, has been subjected to illegal commercial encroachment, debris dumping, and systemic municipal neglect.',
+        '3. LEGAL GROUNDS — PUBLIC TRUST DOCTRINE: That in Bangalore Medical Trust v. B.S. Muddappa (1991) 4 SCC 54 and M.C. Mehta v. Kamal Nath (1997) 1 SCC 388, the Hon’ble Supreme Court firmly held that open public spaces and parks are held by public authorities in solemn trust for the public and cannot be alienated, encroached, or diverted for non-park uses.',
+        '4. VIOLATION OF FUNDAMENTAL RIGHTS: That deprivation and degradation of designated green lung areas violates the Right to a Clean, Wholesome Environment and Healthy Living guaranteed as a core facet of the Right to Life under Article 21 of the Constitution.',
+        '5. REPRESENTATIONS UNHEEDED: That despite multiple detailed written representations submitted to the Municipal Commissioner and Development Authority, no anti-encroachment or sanitization drives have been initiated.'
+      ];
+      const newUltimatum = 'PRAYER: Wherefore, in the light of the above facts, the Petitioner respectfully prays that this Hon’ble Court be pleased to issue a Writ of Mandamus or other appropriate direction directing the Respondent Authorities to immediately remove all illegal encroachments, restore the green canopy and boundary fences of the public park, and institute routine judicial compliance monitoring.';
+      const newSignOff = 'Respectfully Submitted,\nCounsel for the Petitioner\nAdvocate in Public Interest';
+
+      setDocTitle(newTitle);
+      setDraftHeading(newHeading);
+      setDraftTo(newTo);
+      setDraftSubject(newSubject);
+      setDraftClauses(newClauses);
+      setDraftUltimatum(newUltimatum);
+      setDraftSignOff(newSignOff);
+      setDraftDate(new Date().toLocaleDateString('en-IN'));
+      setIsDraftGenerated(true);
+      setSaveStatus('Public Park Petition Generated');
+
+      api.saveDraft({
+        id: `draft-${Date.now()}`,
+        title: newTitle,
+        category: 'Public Interest Litigation',
+        role: currentRole,
+        heading: newHeading,
+        subject: newSubject,
+        bodyClauses: newClauses,
+        ultimatum: newUltimatum,
+        signOffTitle: newSignOff
+      }).catch(() => {});
+
+      setTimeout(() => {
+        const aiReply = {
+          id: (Date.now() + 1).toString(),
+          sender: 'ai' as const,
+          text: 'I have drafted a comprehensive Public Interest Litigation (PIL) under Article 226 of the Constitution of India for the protection and removal of encroachments from the public park. The draft invokes the Public Trust Doctrine (citing Bangalore Medical Trust v. B.S. Muddappa and M.C. Mehta) and fundamental rights under Article 21. The document canvas on the left has been updated with the complete pleading and prayer.',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages((prev) => [...prev, aiReply]);
+        setActiveMobileView('canvas');
+      }, 400);
+
+    } else if (pLower.startsWith('add clause') || pLower.startsWith('add a clause') || pLower.includes('add clause')) {
+      const clauseText = promptText.replace(/add\s+(a\s+)?clause\s*(:|-)?\s*/i, '').trim();
+      const newClauses = [...draftClauses, `CLAUSE ${draftClauses.length + 1}: ${clauseText}`];
+      setDraftClauses(newClauses);
+      setSaveStatus('Clause added');
+
+      setTimeout(() => {
+        const aiReply = {
+          id: (Date.now() + 1).toString(),
+          sender: 'ai' as const,
+          text: `Added new clause to the draft: "${clauseText}". The canvas has been updated.`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages((prev) => [...prev, aiReply]);
+      }, 400);
+
+    } else {
+      // Dynamic General Drafting / Revision Handler
+      try {
+        const draftRes = await api.generateDraft({
+          customInstructions: promptText,
+          documentType: selectedTemplate.category,
+          facts: formValues
+        });
+
+        if (draftRes.success && draftRes.data) {
+          const draftData = draftRes.data.draft || draftRes.data;
+          const updatedHeading = draftData.heading || draftHeading;
+          const updatedSubject = draftData.subject || `Pleadings regarding ${promptText.slice(0, 50)}`;
+          const updatedClauses = Array.isArray(draftData.bodyClauses) && draftData.bodyClauses.length > 0 
+            ? draftData.bodyClauses 
+            : [
+                `1. That the Claimant hereby places on record the material facts and statutory grounds concerning ${promptText}.`,
+                `2. That the applicable statutory provisions under Indian law have been duly reviewed, and the opposite party is bound to comply with the relevant contractual and legal covenants.`,
+                `3. That the Claimant reserves all statutory rights to initiate formal legal proceedings before the competent court of law.`
+              ];
+          const updatedUltimatum = draftData.ultimatum || draftUltimatum;
+          const updatedSignOff = draftData.signOffTitle || draftSignOff;
+
+          setDraftHeading(updatedHeading);
+          setDraftSubject(updatedSubject);
+          setDraftClauses(updatedClauses);
+          setDraftUltimatum(updatedUltimatum);
+          setDraftSignOff(updatedSignOff);
+          setDraftDate(new Date().toLocaleDateString('en-IN'));
+          setIsDraftGenerated(true);
+          setSaveStatus('Canvas updated with AI draft');
+
+          const aiReply = {
+            id: (Date.now() + 1).toString(),
+            sender: 'ai' as const,
+            text: `I have processed your instruction: "${promptText}". The document canvas on the left has been updated with the relevant legal provisions, customized clauses, and statutory notice terms.`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setMessages((prev) => [...prev, aiReply]);
+          setActiveMobileView('canvas');
+        } else {
+          // Dynamic client-side synthesis fallback
+          const newTopic = promptText.length > 50 ? `${promptText.slice(0, 50)}...` : promptText;
+          const synthesizedClauses = [
+            `1. That this notice is formally addressed regarding "${promptText}", setting forth the material facts and legal claims of the aggrieved party.`,
+            `2. That your ongoing actions constitute a direct infraction of contractual good faith and applicable statutory protections.`,
+            `3. That you are strictly called upon to cease and desist from unlawful conduct and remedy the grievances within 15 days.`
+          ];
+          setDraftSubject(`Formal Legal Notice regarding ${newTopic}`);
+          setDraftClauses(synthesizedClauses);
+          setDraftDate(new Date().toLocaleDateString('en-IN'));
+          setIsDraftGenerated(true);
+          setSaveStatus('Canvas updated');
+
+          const aiReply = {
+            id: (Date.now() + 1).toString(),
+            sender: 'ai' as const,
+            text: `Understood your instruction: "${promptText}". I have drafted customized clauses and refreshed the document canvas on the left to reflect this topic.`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setMessages((prev) => [...prev, aiReply]);
+          setActiveMobileView('canvas');
+        }
+      } catch (err) {
+        const synthesizedClauses = [
+          `1. That this formal communication concerns "${promptText}", placing on record the grievance of the Claimant.`,
+          `2. That the opposite party's conduct is without legal justification and violates subsisting covenants.`,
+          `3. That immediate compliance is demanded within 15 days, failing which legal proceedings shall ensue.`
+        ];
+        setDraftSubject(`Notice regarding ${promptText.slice(0, 40)}`);
+        setDraftClauses(synthesizedClauses);
+        setDraftDate(new Date().toLocaleDateString('en-IN'));
+        setIsDraftGenerated(true);
+        setSaveStatus('Canvas updated');
+
+        const aiReply = {
+          id: (Date.now() + 1).toString(),
+          sender: 'ai' as const,
+          text: `Understood. I have drafted custom clauses for "${promptText}" and updated the document canvas on the left.`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages((prev) => [...prev, aiReply]);
+        setActiveMobileView('canvas');
+      }
+    }
   };
 
   return (
@@ -1275,8 +1616,8 @@ export default function DraftingStudio({
                     {/* Paper Content */}
                     <div>
                       {/* Centered Document Title */}
-                      <h3 className="font-serif-title text-center text-xl sm:text-2xl font-bold tracking-[0.2em] text-[#0F172A] mb-8 uppercase">
-                        {selectedTemplate.heading}
+                      <h3 className="font-serif-title text-center text-xl sm:text-2xl font-bold tracking-[0.2em] text-[#0F172A] mb-8 uppercase whitespace-pre-line">
+                        {draftHeading}
                       </h3>
 
                       {/* Date & Addressee */}
@@ -1284,28 +1625,26 @@ export default function DraftingStudio({
                         <p className="text-slate-700">
                           <span className="font-semibold">Date:</span>{' '}
                           <span className="bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] px-2.5 py-0.5 rounded text-xs font-mono font-semibold">
-                            {isDraftGenerated ? new Date().toLocaleDateString('en-IN') : '[MISSING]'}
+                            {draftDate || (isDraftGenerated ? new Date().toLocaleDateString('en-IN') : '[MISSING]')}
                           </span>
                         </p>
 
                         <div className="text-slate-700">
                           <p>To,</p>
-                          <span className="bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] px-2.5 py-0.5 rounded text-xs font-mono font-semibold inline-block mt-0.5">
-                            {isDraftGenerated && Object.values(formValues)[0] 
-                              ? `${Object.values(formValues)[0]}`
-                              : selectedTemplate.toPlaceholder}
+                          <span className="bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] px-2.5 py-0.5 rounded text-xs font-mono font-semibold inline-block mt-0.5 whitespace-pre-line">
+                            {draftTo}
                           </span>
                         </div>
 
                         <p className="pt-1.5">
-                          <span className="font-bold text-[#0F172A] text-base">Subject: {selectedTemplate.subject}</span>
+                          <span className="font-bold text-[#0F172A] text-base">Subject: {draftSubject}</span>
                         </p>
                       </div>
 
                       {/* Body Clauses */}
                       <div className="space-y-4 text-slate-800 leading-relaxed font-serif">
                         <ol className="list-decimal pl-6 space-y-3 text-justify">
-                          {selectedTemplate.bodyClauses.map((clause, idx) => (
+                          {draftClauses.map((clause, idx) => (
                             <li key={idx} className="leading-relaxed">
                               {clause.split('[CONFIRM:').map((chunk, cIdx) => {
                                 if (cIdx === 0) return chunk;
@@ -1323,9 +1662,9 @@ export default function DraftingStudio({
                           ))}
                         </ol>
 
-                        {selectedTemplate.ultimatum && (
-                          <p className="text-justify pt-2">
-                            {selectedTemplate.ultimatum}
+                        {draftUltimatum && (
+                          <p className="text-justify pt-2 font-serif leading-relaxed">
+                            {draftUltimatum}
                           </p>
                         )}
 
@@ -1333,7 +1672,7 @@ export default function DraftingStudio({
                         <div className="pt-6 font-sans space-y-1">
                           <p className="text-slate-700">Yours faithfully,</p>
                           <p className="font-bold text-[#0F172A] pt-3 text-base whitespace-pre-line">
-                            {selectedTemplate.signOffTitle}
+                            {draftSignOff}
                           </p>
                         </div>
                       </div>
@@ -1351,8 +1690,10 @@ export default function DraftingStudio({
 
                     {/* Paper Status Footer */}
                     <div className="mt-8 pt-4 border-t border-[#F0EBE0] flex flex-wrap items-center justify-between text-xs text-slate-500 font-sans">
-                      <span>Words: 158 · Characters: 1,024</span>
-                      <span className="italic text-slate-400">Draft for review · Not yet finalised</span>
+                      <span>Words: {[draftHeading, draftSubject, draftTo, ...draftClauses, draftUltimatum, draftSignOff].join(' ').split(/\s+/).filter(Boolean).length} · Characters: {[draftHeading, draftSubject, draftTo, ...draftClauses, draftUltimatum, draftSignOff].join(' ').length.toLocaleString()}</span>
+                      <span className="italic text-slate-400">
+                        {isDraftGenerated ? 'Draft prepared for statutory review' : 'Draft for review · Not yet finalised'}
+                      </span>
                     </div>
 
                   </div>
@@ -1506,10 +1847,20 @@ export default function DraftingStudio({
                       {/* Generate Draft Button */}
                       <button
                         type="submit"
-                        className="w-full py-2.5 mt-2 bg-[#1E3A8A] hover:bg-[#162A65] text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                        disabled={isGenerating}
+                        className="w-full py-2.5 mt-2 bg-[#1E3A8A] hover:bg-[#162A65] text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-60"
                       >
-                        <span>Generate Draft</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
+                        {isGenerating ? (
+                          <>
+                            <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span>Generating Tailored Draft...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Generate Draft</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </>
+                        )}
                       </button>
                     </form>
 

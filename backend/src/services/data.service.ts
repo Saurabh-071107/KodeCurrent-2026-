@@ -111,15 +111,15 @@ export const SEED_TEMPLATES = [
       { id: 'teamCode', label: 'Team Code', placeholder: 'e.g. TC-42' }
     ],
     heading: 'MEMORIAL FOR THE PETITIONER',
-    subject: 'Pleadings on behalf of the Petitioner under Article 32 of Constitution',
-    toPlaceholder: 'IN THE HON’BLE SUPREME COURT OF INDICA',
+    subject: 'Pleadings and Submissions on behalf of the Petitioner',
+    toPlaceholder: '[Hon’ble Court / Bench Name]',
     bodyClauses: [
-      'STATEMENT OF JURISDICTION: The Petitioner approaches this Hon’ble Court under Article 32 of the Constitution challenging arbitrary surveillance regulations violating fundamental privacy rights.',
-      'STATEMENT OF FACTS: The Government enacted data retention protocols compelling telecom providers to store biometric telemetry for 5 years without prior judicial warrant.',
-      'ARGUMENT ADVANCED — ISSUE 1: The impugned circular fails the four-pronged proportionality test laid down in K.S. Puttaswamy (Privacy 9J) v. Union of India.'
+      'STATEMENT OF JURISDICTION: [Jurisdiction pleadings under applicable constitutional or statutory provisions will be synthesized based on your case details]',
+      'STATEMENT OF FACTS: [Factual background, material dispute events, and impugned actions will be detailed here upon generation]',
+      'ARGUMENTS ADVANCED: [Constitutional grounds, statutory sections, and legal submissions on framed issues will appear here]'
     ],
-    ultimatum: 'PRAYER: Wherefore, in the light of the facts stated and authorities cited, the Petitioner respectfully prays that this Hon’ble Court declare the impugned regulations ultra vires Articles 14, 19 and 21.',
-    signOffTitle: 'Respectfully Submitted,\nCounsels for the Petitioner (Team [TC-42])'
+    ultimatum: 'PRAYER: [Specific relief, declarations, or directions sought from the Hon’ble Bench will be formulated here]',
+    signOffTitle: 'Respectfully Submitted,\nCounsels for the Petitioner'
   }
 ];
 
