@@ -337,7 +337,7 @@ function buildSynthesizedLegalDraft(documentType?: string, facts?: any, customIn
     return {
       title: 'Public Interest Litigation — Protection & Restoration of Public Park',
       heading: 'IN THE HON’BLE HIGH COURT OF JUDICATURE\n(ORIGINAL WRIT JURISDICTION — PUBLIC INTEREST LITIGATION)',
-      toPlaceholder: 'TO,\nTHE HON’BLE CHIEF JUSTICE AND COMPANION JUSTICES OF THE HON’BLE HIGH COURT',
+      toPlaceholder: 'THE HON’BLE CHIEF JUSTICE AND COMPANION JUSTICES OF THE HON’BLE HIGH COURT',
       subject: 'WRIT PETITION UNDER ARTICLE 226 OF THE CONSTITUTION OF INDIA SEEKING REMOVAL OF ENCROACHMENTS AND PRESERVATION OF PUBLIC RECREATIONAL PARK LAND',
       bodyClauses: [
         'STATEMENT OF JURISDICTION: The Petitioner, an aggrieved resident and citizen, invokes the extraordinary writ jurisdiction of this Hon’ble Court under Article 226 of the Constitution of India in public interest for the preservation, maintenance, and ecological restoration of municipal public park space.',

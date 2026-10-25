@@ -216,6 +216,90 @@ export const MASTER_TEMPLATES: TemplateDefinition[] = [
     ],
     ultimatum: 'PRAYER: Wherefore, in the light of the facts stated and authorities cited, the Petitioner respectfully prays that this Hon’ble Court declare the impugned regulations ultra vires Articles 14, 19 and 21.',
     signOffTitle: 'Respectfully Submitted,\nCounsels for the Petitioner (Team [TC-42])'
+  },
+
+  // 6. Citizen / Tenant: Arbitrary Rent / Price Hike Objection
+  {
+    id: 'tenant-rent-hike-objection',
+    title: 'Notice & Objection — Arbitrary Rent Increase by Landlord',
+    role: 'citizen',
+    category: 'Tenancy Grievance',
+    skillName: 'Rent Hike Objection',
+    skillDesc: 'Statutory objection against illegal, unilateral rent hike by property owner',
+    formFields: [
+      { id: 'landlordName', label: 'Landlord Full Name', placeholder: 'e.g. Ramesh Sharma', required: true },
+      { id: 'landlordAddress', label: 'Landlord Residence Address', placeholder: 'e.g. B-12, Green Park, New Delhi', required: true },
+      { id: 'premisesAddress', label: 'Rented Premises Address', placeholder: 'e.g. Flat 304, Palm Grove Apts', required: true },
+      { id: 'contractedRent', label: 'Current Agreed Rent (₹)', placeholder: 'e.g. 20,000', required: true },
+      { id: 'demandedRent', label: 'Demanded / Hiked Rent (₹)', placeholder: 'e.g. 30,000', required: true },
+      { id: 'agreementDate', label: 'Agreement Date', placeholder: 'DD / MM / YYYY' },
+      { id: 'tenantName', label: 'Your Name (Tenant)', placeholder: 'e.g. Rahul Verma', required: true }
+    ],
+    heading: 'FORMAL LEGAL NOTICE & STATUTORY OBJECTION AGAINST UNLAWFUL RENT HIKE',
+    subject: 'FORMAL LEGAL NOTICE AND OBJECTION AGAINST UNILATERAL AND ARBITRARY RENT ESCALATION IN VIOLATION OF SUBSISTING TENANCY AGREEMENT AND RENT CONTROL FRAMEWORK',
+    toPlaceholder: '[Landlord / Property Owner Full Name]\n[Landlord Residence Address / Property Owner]',
+    bodyClauses: [
+      '1. LAWFUL TENANCY STATUS: That the undersigned is a bona fide lawful tenant residing at Flat / Premises situated at [Demised Premises Address] pursuant to a valid and subsisting Tenancy Agreement dated [Agreement Date], with monthly rent mutually fixed at ₹ [Contracted Rent]/- per month.',
+      '2. UNILATERAL AND ARBITRARY ESCALATION: That your recent demand demanding an arbitrary price hike to ₹ [Demanded Rent]/- during the ongoing tenancy period is completely unilateral, unconscionable, and in direct contravention of the express terms of the agreement and statutory rent regulations.',
+      '3. STATUTORY INFRACTION: That under the settled principles of the Model Tenancy Framework and applicable Rent Control jurisprudence, a landlord cannot unilaterally hike rent or threaten eviction without complying with statutory notice periods and contracted escalation caps.',
+      '4. PUNCTUAL COMPLIANCE BY TENANT: That the tenant has consistently paid the contracted monthly rent on time without default, and any threat of dispossession, disturbance of peaceful possession, or disconnection of essential utilities (water, electricity, maintenance) is strictly illegal and actionable under civil and criminal law.'
+    ],
+    ultimatum: 'TAKE NOTICE that you are hereby called upon to withdraw the arbitrary rent hike demand within 7 (Seven) days of receipt of this notice and continue accepting the lawfully contracted rent, failing which the undersigned will initiate civil injunction proceedings before the Competent Civil Court and lodge a complaint before the Rent Authority at your risk and cost.',
+    signOffTitle: 'Yours faithfully,\n[Tenant Name]\nLawful Tenant in Peaceful Occupation'
+  },
+
+  // 7. Citizen / Tenant: Restoration of Electricity & Essential Amenities
+  {
+    id: 'tenant-power-restoration',
+    title: 'Legal Notice — Unlawful Disconnection of Electricity Supply',
+    role: 'citizen',
+    category: 'Utility Grievance',
+    skillName: 'Electricity Restoration Notice',
+    skillDesc: 'Statutory demand against unlawful disconnection of electrical power supply',
+    formFields: [
+      { id: 'landlordName', label: 'Opposite Party / Landlord Name', placeholder: 'e.g. Harish Hirani', required: true },
+      { id: 'landlordAddress', label: 'Opposite Party Address', placeholder: 'e.g. Demised Premises Owner Residence', required: true },
+      { id: 'premisesAddress', label: 'Rented Premises Address', placeholder: 'e.g. Flat 101, Block C', required: true },
+      { id: 'tenantName', label: 'Your Name (Complainant)', placeholder: 'e.g. Complainant Occupant', required: true }
+    ],
+    heading: 'FORMAL LEGAL NOTICE & DEMAND FOR IMMEDIATE RESTORATION OF ELECTRICITY',
+    subject: 'URGENT STATUTORY NOTICE UNDER SECTION 19 MODEL TENANCY ACT / SECTION 108 TRANSFER OF PROPERTY ACT FOR UNLAWFUL DISCONNECTION OF ELECTRICITY SUPPLY',
+    toPlaceholder: 'Harish Hirani / Property Owner\n[Demised Premises Owner Address]',
+    bodyClauses: [
+      '1. LAWFUL TENANCY & PAID ARREARS: That the Claimant is the lawful occupant/tenant in possession of the premises situated at [Demised Premises Address], having faithfully and punctually cleared all monthly rental and electric utility liabilities with zero arrears.',
+      '2. MALICIOUS DISCONNECTION: That you have deliberately, unlawfully, and without any judicial order or statutory sanction disconnected the electrical power supply to the premises, plunging the residence into complete darkness and rendering it uninhabitable.',
+      '3. STATUTORY PROHIBITION AGAINST WITHHOLDING AMENITIES: That under Section 19 of the Model Tenancy Act, 2021, a landlord is strictly prohibited from withholding or severing essential amenities—especially electrical power and water supply—under any circumstances, including pending tenancy disputes.',
+      '4. DELIBERATE ACTIONABLE HARASSMENT: That such high-handed conduct constitutes an actionable civil wrong, trespass, and criminal intimidation under Sections 324 and 351 of Bharatiya Nyaya Sanhita, 2023.'
+    ],
+    ultimatum: 'TAKE NOTICE that you are hereby called upon to immediately reconnect and restore full electrical power supply to the demised premises within 24 (Twenty-Four) hours from receipt of this notice, failing which an urgent application for interim mandatory injunction under Section 151 CPC along with criminal prosecution will be initiated at your sole risk and peril.',
+    signOffTitle: 'Yours faithfully,\n[Complainant Name]\nAggrieved Lawful Occupant in Possession'
+  },
+
+  // 8. Student / Citizen: Public Park PIL
+  {
+    id: 'pil-public-park',
+    title: 'Public Interest Litigation — Protection of Public Park',
+    role: 'student',
+    category: 'Public Interest Litigation',
+    skillName: 'Public Park PIL Drafter',
+    skillDesc: 'Writ petition under Article 226 for preservation of public park land',
+    formFields: [
+      { id: 'courtName', label: 'Hon’ble High Court Name', placeholder: 'e.g. High Court of Judicature at Bombay', required: true },
+      { id: 'parkLocation', label: 'Park Demarcation & Location', placeholder: 'e.g. Central Municipal Park, Ward 4', required: true },
+      { id: 'petitionerName', label: 'Petitioner / Citizen Name', placeholder: 'e.g. Public Park Welfare Association', required: true }
+    ],
+    heading: 'IN THE HON’BLE HIGH COURT OF JUDICATURE\n(ORIGINAL WRIT JURISDICTION — PUBLIC INTEREST LITIGATION)',
+    subject: 'WRIT PETITION UNDER ARTICLE 226 OF THE CONSTITUTION OF INDIA SEEKING REMOVAL OF ENCROACHMENTS AND PRESERVATION OF PUBLIC RECREATIONAL PARK LAND',
+    toPlaceholder: 'THE HON’BLE CHIEF JUSTICE AND COMPANION JUSTICES OF THE HON’BLE HIGH COURT',
+    bodyClauses: [
+      '1. STATEMENT OF JURISDICTION: The Petitioner, a concerned resident and citizen, invokes the extraordinary writ jurisdiction of this Hon’ble Court under Article 226 of the Constitution of India in public interest for the preservation, maintenance, and ecological restoration of municipal public park space.',
+      '2. STATEMENT OF FACTS: That the demarcated public park situated within the municipal zone, reserved exclusively for recreational and environmental purposes under the Master Development Plan, has been subjected to illegal commercial encroachment, debris dumping, and systemic municipal neglect.',
+      '3. LEGAL GROUNDS — PUBLIC TRUST DOCTRINE: That in Bangalore Medical Trust v. B.S. Muddappa (1991) 4 SCC 54 and M.C. Mehta v. Kamal Nath (1997) 1 SCC 388, the Hon’ble Supreme Court firmly held that open public spaces and parks are held by public authorities in solemn trust for the public and cannot be alienated, encroached, or diverted for non-park uses.',
+      '4. VIOLATION OF FUNDAMENTAL RIGHTS: That deprivation and degradation of designated green lung areas violates the Right to a Clean, Wholesome Environment and Healthy Living guaranteed as a core facet of the Right to Life under Article 21 of the Constitution.',
+      '5. REPRESENTATIONS UNHEEDED: That despite multiple detailed written representations submitted to the Municipal Commissioner and Development Authority, no anti-encroachment or sanitization drives have been initiated.'
+    ],
+    ultimatum: 'PRAYER: Wherefore, in the light of the above facts, the Petitioner respectfully prays that this Hon’ble Court be pleased to issue a Writ of Mandamus or other appropriate direction directing the Respondent Authorities to immediately remove all illegal encroachments, restore the green canopy and boundary fences of the public park, and institute routine judicial compliance monitoring.',
+    signOffTitle: 'Respectfully Submitted,\nCounsel for the Petitioner\nAdvocate in Public Interest'
   }
 ];
 
@@ -298,6 +382,105 @@ const DEFAULT_SAVED_DRAFTS: SavedDraftItem[] = [
     signOffTitle: 'For & on behalf of [Company A]\nAuthorized Signatory'
   }
 ];
+
+// Helper to render text with placeholders highlighted in distinct yellow badges
+export const renderWithPlaceholders = (text: string) => {
+  if (!text) return null;
+  const parts = text.split(/(\[[^\]]+\])/g);
+  return parts.map((part, idx) => {
+    if (part.startsWith('[') && part.endsWith(']')) {
+      return (
+        <span
+          key={idx}
+          className="bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] px-1.5 py-0.5 rounded text-xs font-mono font-semibold font-sans mx-0.5 inline-block select-all"
+        >
+          {part}
+        </span>
+      );
+    }
+    return part;
+  });
+};
+
+// Universal placeholder substitute for form values & extraction
+export const substitutePlaceholders = (text: string, values: Record<string, string>): string => {
+  if (!text) return text;
+  let result = text;
+  const map: Record<string, string[]> = {
+    landlordName: ['[Landlord / Property Owner Full Name]', '[Landlord Name]', '[Property Owner Full Name]', '[Opposite Party / Landlord Name]'],
+    landlordAddress: ['[Landlord Residence Address / Property Owner]', '[Landlord Address]', '[Demised Premises Owner Address]', '[Opposite Party Address]'],
+    premisesAddress: ['[Demised Premises Address]', '[Rented Premises Address]', '[Property Address]', '[Property address]'],
+    contractedRent: ['[Contracted Rent]', '[Current Rent]', '[Amount]'],
+    demandedRent: ['[Demanded Rent]', '[Hike Amount / %]', '[Hiked Rent]'],
+    agreementDate: ['[Agreement Date]', '[Agreement date]'],
+    tenantName: ['[Tenant Name]', '[Complainant Name]', '[Your Name]'],
+    recipient: ['[Recipient Name and Address]', '[Recipient Name]'],
+    address: ['[Property Address]', '[Demised Premises Address]'],
+    amount: ['[Amount]'],
+    date: ['[Agreement Date]'],
+    depositAmount: ['[Deposit Amount]', '75,000'],
+    vacateDate: ['[Vacate Date]'],
+    companyName: ['[Company Name]', '[Company A]'],
+    productName: ['[Product Name]'],
+    courtName: ['[Court Name]'],
+    mootTitle: ['[Moot Title]'],
+    caseTitle: ['[Case Title]'],
+    teamCode: ['[TC-42]', '[Team Code]'],
+    parkLocation: ['[Park Demarcation & Location]', '[Park Location]'],
+    petitionerName: ['[Petitioner Name]', '[Petitioner / Citizen Name]']
+  };
+
+  Object.entries(values).forEach(([fieldKey, val]) => {
+    if (!val || !val.trim()) return;
+    const cleanVal = val.trim();
+    result = result.replace(new RegExp(`\\[CONFIRM:?\\s*${fieldKey}?\\]`, 'gi'), cleanVal);
+    result = result.replace(new RegExp(`\\[${fieldKey}\\]`, 'gi'), cleanVal);
+    const aliases = map[fieldKey];
+    if (aliases) {
+      aliases.forEach((alias) => {
+        result = result.split(alias).join(cleanVal);
+      });
+    }
+  });
+
+  return result;
+};
+
+// Conversational data extractor from user chat prompt
+export const extractFieldsFromText = (text: string): Record<string, string> => {
+  const extracted: Record<string, string> = {};
+  if (!text) return extracted;
+
+  // Landlord name
+  const landlordMatch = text.match(/(?:landlord(?:\s+name)?|owner(?:\s+name)?|party(?:\s+name)?)\s*(?:is|:|=|-)\s*([^,.\n]+)/i);
+  if (landlordMatch) extracted.landlordName = landlordMatch[1].trim();
+
+  // Tenant / Complainant name
+  const tenantMatch = text.match(/(?:tenant(?:\s+name)?|my name|claimant(?:\s+name)?|petitioner(?:\s+name)?)\s*(?:is|:|=|-)\s*([^,.\n]+)/i);
+  if (tenantMatch) extracted.tenantName = tenantMatch[1].trim();
+
+  // Current rent
+  const rentMatch = text.match(/(?:current\s+rent|contracted\s+rent|existing\s+rent|old\s+rent|present\s+rent|rent(?!\s*(?:hike|increase|new|demanded)))\s*(?:is|was|:|=|-)?\s*(?:₹|rs\.?|inr)?\s*([0-9,]+)/i);
+  if (rentMatch) extracted.contractedRent = rentMatch[1].trim();
+
+  // Demanded rent / hike
+  const hikeMatch = text.match(/(?:new\s+rent|demanded\s+rent|hike(?:\s+amount)?|increased\s+rent|price\s+hike)\s*(?:is|to|of|:|=|-)?\s*(?:₹|rs\.?|inr)?\s*([0-9,]+)/i);
+  if (hikeMatch) extracted.demandedRent = hikeMatch[1].trim();
+
+  // Premises address
+  const premisesMatch = text.match(/(?:premises|flat|property|house|apartment|demised\s+premises)\s*(?:address|is|at|:|=|-)\s*([^,.\n]+)/i);
+  if (premisesMatch) extracted.premisesAddress = premisesMatch[1].trim();
+
+  // Landlord address
+  const landlordAddrMatch = text.match(/(?:landlord\s+address|owner\s+address|residence)\s*(?:is|:|=|-)\s*([^,.\n]+)/i);
+  if (landlordAddrMatch) extracted.landlordAddress = landlordAddrMatch[1].trim();
+
+  // Agreement date
+  const dateMatch = text.match(/(?:agreement\s+date|dated|lease\s+date)\s*(?:is|:|=|-)?\s*([0-9]{1,2}[/-][0-9]{1,2}[/-][0-9]{2,4})/i);
+  if (dateMatch) extracted.agreementDate = dateMatch[1].trim();
+
+  return extracted;
+};
 
 interface DraftingStudioProps {
   initialUserName?: string;
@@ -622,86 +805,37 @@ export default function DraftingStudio({
     router.push(`/${newRole}/drafting-studio`);
   };
 
-  // Handle Dynamic Questionnaire Input change
+  // Handle Dynamic Questionnaire Input change with live canvas placeholder replacement
   const handleInputChange = (fieldId: string, val: string) => {
-    setFormValues((prev) => ({ ...prev, [fieldId]: val }));
+    setFormValues((prev) => {
+      const next = { ...prev, [fieldId]: val };
+      if (val.trim()) {
+        const delta = { [fieldId]: val.trim() };
+        setDraftTo((t) => substitutePlaceholders(t, delta));
+        setDraftSubject((s) => substitutePlaceholders(s, delta));
+        setDraftClauses((clauses) => clauses.map((c) => substitutePlaceholders(c, delta)));
+        setDraftUltimatum((u) => substitutePlaceholders(u, delta));
+        setDraftSignOff((so) => substitutePlaceholders(so, delta));
+      }
+      return next;
+    });
   };
 
-  // Handle Generate Draft button click
+  // Handle Generate / Update Draft button click
   const handleGenerateDraft = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsGenerating(true);
-    setSaveStatus('Generating dynamic draft...');
+    setSaveStatus('Applying details to document...');
 
     const todayDate = new Date().toLocaleDateString('en-IN');
     let generatedHeading = selectedTemplate.heading;
-    let generatedSubject = selectedTemplate.subject;
-    let generatedTo = selectedTemplate.toPlaceholder;
-    let generatedClauses: string[] = [];
-    let generatedUltimatum = selectedTemplate.ultimatum;
-    let generatedSignOff = selectedTemplate.signOffTitle;
-
-    // 1. Synthesize clauses tailored directly to formValues
-    if (selectedTemplate.id === 'student-moot-memorial') {
-      const moot = formValues.mootTitle || 'National Moot Court Competition';
-      const cTitle = formValues.caseTitle || 'Union of People v. Republic of Indica';
-      const court = formValues.courtName || 'Supreme Court of Indica';
-      const tCode = formValues.teamCode || 'TC-42';
-
-      generatedHeading = 'MEMORIAL FOR THE PETITIONER';
-      generatedTo = `IN THE HON’BLE ${court.toUpperCase()}`;
-      generatedSubject = `Pleadings on behalf of the Petitioner in "${cTitle}" under Article 32 of Constitution`;
-      generatedClauses = [
-        `STATEMENT OF JURISDICTION: The Petitioner approaches this Hon’ble ${court} under Article 32 of the Constitution of Indica, challenging arbitrary surveillance and telemetry directives promulgated in the context of ${moot}.`,
-        `STATEMENT OF FACTS: Arising out of "${cTitle}", the Government enacted mandatory data retention protocols compelling telecom service providers to store biometric and telemetry records for 5 years without prior judicial warrant or statutory authorization.`,
-        `ARGUMENT ADVANCED — ISSUE 1: The impugned executive circular fails the four-pronged proportionality test laid down in K.S. Puttaswamy (Privacy 9J) v. Union of India and Modern Dental College, lacking legitimate state purpose and least-intrusive alternative design.`,
-        `ARGUMENT ADVANCED — ISSUE 2: The executive regulations infringe procedural due process under Articles 14 and 21, being manifestly arbitrary and devoid of independent supervisory safeguards.`
-      ];
-      generatedUltimatum = `PRAYER: Wherefore, in the light of the facts stated, authorities cited, and arguments advanced, the Petitioner (Team [${tCode}]) respectfully prays that this Hon’ble Court declare the impugned regulations ultra vires Articles 14, 19, and 21, and quash the enforcement circular.`;
-      generatedSignOff = `Respectfully Submitted,\nCounsels for the Petitioner (Team [${tCode}])`;
-    } else if (selectedTemplate.id === 'legal-notice-rent') {
-      const recipient = formValues.recipient || '[Tenant Name]';
-      const address = formValues.address || '[Property Address]';
-      const amount = formValues.amount ? `₹ ${formValues.amount}/-` : '₹ [Amount]/-';
-      const agDate = formValues.date || '[Agreement Date]';
-
-      generatedHeading = 'LEGAL NOTICE';
-      generatedTo = `${recipient}\nResiding at: ${address}`;
-      generatedSubject = `Notice of Demand under Section 106 Transfer of Property Act regarding outstanding rent of ${amount}`;
-      generatedClauses = [
-        `1. That my client is the absolute lawful owner and landlord of the residential premises situated at ${address}.`,
-        `2. That you were inducted as a tenant into the said premises under a valid rent agreement dated ${agDate}, covenanting to pay monthly rent regularly.`,
-        `3. That you have persistently defaulted in payment of rent, and an aggregate sum of ${amount} is currently due, payable, and unlawfully withheld despite repeated demands.`,
-        `4. That your continuing failure to remit arrears constitutes a material breach of tenancy covenants causing severe pecuniary loss to my client.`
-      ];
-      generatedUltimatum = `You are hereby called upon to pay the entire outstanding amount of ${amount} within 15 (Fifteen) days from the date of receipt of this notice, failing which my client shall be constrained to initiate formal recovery and eviction proceedings against you.`;
-      generatedSignOff = `[Advocate Name]\nCounsel for the Landlord`;
-    } else if (selectedTemplate.id === 'citizen-security-deposit') {
-      const landlord = formValues.landlord || '[Landlord Name]';
-      const flat = formValues.flat || '[Rented Premises Address]';
-      const deposit = formValues.depositAmount ? `₹ ${formValues.depositAmount}/-` : '₹ 75,000/-';
-      const vacate = formValues.vacateDate || '[Vacate Date]';
-
-      generatedHeading = 'FORMAL NOTICE FOR RETURN OF SECURITY DEPOSIT';
-      generatedTo = `${landlord}\nOwner / Lessor`;
-      generatedSubject = `Urgent demand for immediate refund of interest-free security deposit of ${deposit}`;
-      generatedClauses = [
-        `1. That I was the bona fide tenant of your flat situated at ${flat}, having peacefully vacated and handed over vacant physical possession along with keys on ${vacate}.`,
-        `2. That all utility bills, society maintenance charges, and rental obligations have been paid in full with zero pending arrears.`,
-        `3. That despite joint physical inspection verifying the premises in good tenable condition, the interest-free security deposit amounting to ${deposit} remains unlawfully withheld without any justification.`
-      ];
-      generatedUltimatum = `I hereby request and demand that you remit the complete deposit amount of ${deposit} to my bank account within 7 days, failing which I shall be compelled to initiate civil recovery and consumer grievance proceedings before the appropriate forum.`;
-      generatedSignOff = `[Tenant Name]\nFormer Tenant & Verified Citizen`;
-    } else {
-      // Default: replace placeholders with form values
-      generatedClauses = selectedTemplate.bodyClauses.map((clause) => {
-        let text = clause;
-        Object.entries(formValues).forEach(([k, v]) => {
-          if (v) text = text.replace(new RegExp(`\\[CONFIRM:?\\s*${k}?\\]`, 'gi'), v);
-        });
-        return text.replace(/\[CONFIRM:[^\]]+\]/g, 'Confirmed');
-      });
-    }
+    let generatedSubject = substitutePlaceholders(selectedTemplate.subject, formValues);
+    let generatedTo = substitutePlaceholders(selectedTemplate.toPlaceholder, formValues);
+    let generatedClauses = selectedTemplate.bodyClauses.map((clause) =>
+      substitutePlaceholders(clause, formValues)
+    );
+    let generatedUltimatum = substitutePlaceholders(selectedTemplate.ultimatum, formValues);
+    let generatedSignOff = substitutePlaceholders(selectedTemplate.signOffTitle, formValues);
 
     // Call backend API if online
     try {
@@ -728,14 +862,15 @@ export default function DraftingStudio({
     // Update live Canvas State
     setDraftHeading(generatedHeading);
     setDraftSubject(generatedSubject);
-    setDraftTo(generatedTo);
+    setDraftTo(generatedTo.replace(/^(to\s*,?\s*\n?)/i, '').trim());
     setDraftClauses(generatedClauses);
     setDraftUltimatum(generatedUltimatum);
     setDraftSignOff(generatedSignOff);
     setDraftDate(todayDate);
     setIsDraftGenerated(true);
     setIsGenerating(false);
-    setSaveStatus('Draft generated just now');
+    setSaveStatus('Draft updated just now');
+    canvasScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
 
     // Save in saved drafts
     const existingIndex = savedDrafts.findIndex((d) => d.title === docTitle);
@@ -794,26 +929,25 @@ export default function DraftingStudio({
 
     // Check if user is asking to draft something specific (e.g. "draft me petetion for public park", "write a complaint about price hike from landlord")
     const isPriceHike = pLower.includes('hike') || pLower.includes('hick') || pLower.includes('price') || pLower.includes('escalat') || pLower.includes('increase rent') || pLower.includes('illegal rent') || (pLower.includes('complaint') && (pLower.includes('landlord') || pLower.includes('rent')));
+    const isPowerLoss = pLower.includes('power') || pLower.includes('electric') || pLower.includes('blackout') || pLower.includes('disconnection') || pLower.includes('harish hirani');
     const isPark = pLower.includes('park') || pLower.includes('public park') || pLower.includes('environment') || pLower.includes('encroachment');
 
     if (isPriceHike) {
-      // Generate Landlord Rent / Price Hike Complaint & Legal Notice
-      const newTitle = 'Notice & Objection — Arbitrary Rent Increase by Landlord';
-      const newHeading = 'FORMAL LEGAL NOTICE & STATUTORY OBJECTION AGAINST UNLAWFUL RENT HIKE';
-      const newTo = 'TO,\n[Landlord / Property Owner Full Name]\n[Landlord Residence Address / Property Owner]';
-      const newSubject = 'FORMAL LEGAL NOTICE AND OBJECTION AGAINST UNILATERAL AND ARBITRARY RENT ESCALATION IN VIOLATION OF SUBSISTING TENANCY AGREEMENT AND RENT CONTROL FRAMEWORK';
-      const newClauses = [
-        '1. LAWFUL TENANCY STATUS: That the undersigned is a bona fide lawful tenant residing at Flat / Premises situated at [Demised Premises Address] pursuant to a valid and subsisting Tenancy Agreement dated [Agreement Date], with monthly rent mutually fixed at ₹ [Contracted Rent]/- per month.',
-        '2. UNILATERAL AND ARBITRARY ESCALATION: That your recent demand demanding an arbitrary price hike and rent escalation during the ongoing tenancy period is completely unilateral, unconscionable, and in direct contravention of the express terms of the agreement and statutory rent regulations.',
-        '3. STATUTORY INFRACTION: That under the settled principles of the Model Tenancy Framework and applicable Rent Control jurisprudence, a landlord cannot unilaterally hike rent or threaten eviction without complying with statutory notice periods and contracted escalation caps.',
-        '4. PUNCTUAL COMPLIANCE BY TENANT: That the tenant has consistently paid the contracted monthly rent on time without default, and any threat of dispossession, disturbance of peaceful possession, or disconnection of essential utilities (water, electricity, maintenance) is strictly illegal and actionable under civil and criminal law.'
-      ];
-      const newUltimatum = 'TAKE NOTICE that you are hereby called upon to withdraw the arbitrary rent hike demand within 7 (Seven) days of receipt of this notice and continue accepting the lawfully contracted rent, failing which the undersigned will initiate civil injunction proceedings before the Competent Civil Court and lodge a complaint before the Rent Authority at your risk and cost.';
-      const newSignOff = 'Yours faithfully,\n[Tenant Name]\nLawful Tenant in Peaceful Occupation';
+      // Switch active template to Rent Hike Objection
+      const hikeTemplate = MASTER_TEMPLATES.find((t) => t.id === 'tenant-rent-hike-objection') || MASTER_TEMPLATES[0];
+      setSelectedTemplate(hikeTemplate);
+
+      const newTitle = hikeTemplate.title;
+      const newHeading = hikeTemplate.heading;
+      const newTo = hikeTemplate.toPlaceholder;
+      const newSubject = hikeTemplate.subject;
+      const newClauses = hikeTemplate.bodyClauses;
+      const newUltimatum = hikeTemplate.ultimatum;
+      const newSignOff = hikeTemplate.signOffTitle;
 
       setDocTitle(newTitle);
       setDraftHeading(newHeading);
-      setDraftTo(newTo);
+      setDraftTo(newTo.replace(/^(to\s*,?\s*\n?)/i, '').trim());
       setDraftSubject(newSubject);
       setDraftClauses(newClauses);
       setDraftUltimatum(newUltimatum);
@@ -839,31 +973,28 @@ export default function DraftingStudio({
         const aiReply = {
           id: (Date.now() + 1).toString(),
           sender: 'ai' as const,
-          text: 'I have generated a formal Statutory Legal Notice & Objection against the arbitrary price/rent hike from your landlord. The draft invokes statutory protections under the Model Tenancy framework, protects against coercive eviction, and places your formal refusal on record. The document canvas on the left has been updated with the full legal notice.',
+          text: `I have generated the formal Statutory Legal Notice & Objection against the arbitrary price/rent hike on the document canvas.\n\nTo personalize your notice and replace the yellow placeholders, please provide the following details:\n1. 👤 Landlord's Full Name\n2. 📍 Landlord's Residence Address\n3. 🏠 Rented Premises Address\n4. 💰 Current Agreed Rent (₹)\n5. 📈 Demanded / Hiked Rent (₹)\n6. 📅 Agreement Date\n7. ✍️ Your Name (Tenant)\n\n👉 You can type these into the form fields right above this chat, or simply reply here with the details (e.g. "Landlord is Ramesh Sharma, address is Flat 101, rent is 20000, new rent 30000, tenant is Rahul").`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setMessages((prev) => [...prev, aiReply]);
-        setActiveMobileView('canvas');
       }, 400);
 
-    } else if (pLower.includes('power') || pLower.includes('electric') || pLower.includes('blackout') || pLower.includes('disconnection') || pLower.includes('harish hirani')) {
-      // Generate Illegal Power Disconnection Legal Notice
-      const newTitle = 'Legal Notice — Unlawful Disconnection of Electricity Supply';
-      const newHeading = 'FORMAL LEGAL NOTICE & DEMAND FOR IMMEDIATE RESTORATION OF ELECTRICITY';
-      const newTo = 'TO,\nHarish Hirani / Property Owner\n[Demised Premises Owner Address]';
-      const newSubject = 'URGENT STATUTORY NOTICE UNDER SECTION 19 MODEL TENANCY ACT / SECTION 108 TRANSFER OF PROPERTY ACT FOR UNLAWFUL DISCONNECTION OF ELECTRICITY SUPPLY';
-      const newClauses = [
-        '1. LAWFUL TENANCY & PAID ARREARS: That the Claimant is the lawful occupant/tenant in possession of the premises, having faithfully and punctually cleared all monthly rental and electric utility liabilities with zero arrears.',
-        '2. MALICIOUS DISCONNECTION: That you have deliberately, unlawfully, and without any judicial order or statutory sanction disconnected the electrical power supply to the premises, plunging the residence into complete darkness and rendering it uninhabitable.',
-        '3. STATUTORY PROHIBITION AGAINST WITHHOLDING AMENITIES: That under Section 19 of the Model Tenancy Act, 2021, a landlord is strictly prohibited from withholding or severing essential amenities—especially electrical power and water supply—under any circumstances, including pending tenancy disputes.',
-        '4. DELIBERATE ACTIONABLE HARASSMENT: That such high-handed conduct constitutes an actionable civil wrong, trespass, and criminal intimidation under Sections 324 and 351 of Bharatiya Nyaya Sanhita, 2023.'
-      ];
-      const newUltimatum = 'TAKE NOTICE that you are hereby called upon to immediately reconnect and restore full electrical power supply to the demised premises within 24 (Twenty-Four) hours from receipt of this notice, failing which an urgent application for interim mandatory injunction under Section 151 CPC along with criminal prosecution will be initiated at your sole risk and peril.';
-      const newSignOff = 'Yours faithfully,\n[Complainant Name]\nAggrieved Lawful Occupant in Possession';
+    } else if (isPowerLoss) {
+      // Switch active template to Electricity Notice
+      const powerTemplate = MASTER_TEMPLATES.find((t) => t.id === 'tenant-power-restoration') || MASTER_TEMPLATES[0];
+      setSelectedTemplate(powerTemplate);
+
+      const newTitle = powerTemplate.title;
+      const newHeading = powerTemplate.heading;
+      const newTo = powerTemplate.toPlaceholder;
+      const newSubject = powerTemplate.subject;
+      const newClauses = powerTemplate.bodyClauses;
+      const newUltimatum = powerTemplate.ultimatum;
+      const newSignOff = powerTemplate.signOffTitle;
 
       setDocTitle(newTitle);
       setDraftHeading(newHeading);
-      setDraftTo(newTo);
+      setDraftTo(newTo.replace(/^(to\s*,?\s*\n?)/i, '').trim());
       setDraftSubject(newSubject);
       setDraftClauses(newClauses);
       setDraftUltimatum(newUltimatum);
@@ -889,32 +1020,28 @@ export default function DraftingStudio({
         const aiReply = {
           id: (Date.now() + 1).toString(),
           sender: 'ai' as const,
-          text: 'I have drafted an urgent Statutory Legal Notice & Demand for immediate restoration of electricity supply against Harish Hirani. The notice invokes statutory protections under Section 19 of the Model Tenancy Act and criminal provisions against unlawful disconnection of essential services. The document canvas on the left has been refreshed with the full pleading and 24-hour restoration ultimatum.',
+          text: `I have drafted an urgent Statutory Legal Notice & Demand for immediate restoration of electricity supply on the document canvas.\n\nTo personalize your notice and replace the yellow placeholders, please provide:\n1. 👤 Landlord / Opposite Party Name (e.g. Harish Hirani)\n2. 📍 Landlord's Address\n3. 🏠 Demised Premises Address\n4. ✍️ Your Name (Complainant)\n\n👉 You can fill the form fields above or reply directly in chat with these details.`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setMessages((prev) => [...prev, aiReply]);
-        setActiveMobileView('canvas');
       }, 400);
 
     } else if (isPark) {
-      // Generate Public Park PIL
-      const newTitle = 'Public Interest Litigation — Protection of Public Park';
-      const newHeading = 'IN THE HON’BLE HIGH COURT OF JUDICATURE\n(ORIGINAL WRIT JURISDICTION — PUBLIC INTEREST LITIGATION)';
-      const newTo = 'TO,\nTHE HON’BLE CHIEF JUSTICE AND COMPANION JUSTICES OF THE HON’BLE HIGH COURT';
-      const newSubject = 'WRIT PETITION UNDER ARTICLE 226 OF THE CONSTITUTION OF INDIA SEEKING REMOVAL OF ENCROACHMENTS AND PRESERVATION OF PUBLIC RECREATIONAL PARK LAND';
-      const newClauses = [
-        '1. STATEMENT OF JURISDICTION: The Petitioner, a concerned resident and citizen, invokes the extraordinary writ jurisdiction of this Hon’ble Court under Article 226 of the Constitution of India in public interest for the preservation, maintenance, and ecological restoration of municipal public park space.',
-        '2. STATEMENT OF FACTS: That the demarcated public park situated within the municipal zone, reserved exclusively for recreational and environmental purposes under the Master Development Plan, has been subjected to illegal commercial encroachment, debris dumping, and systemic municipal neglect.',
-        '3. LEGAL GROUNDS — PUBLIC TRUST DOCTRINE: That in Bangalore Medical Trust v. B.S. Muddappa (1991) 4 SCC 54 and M.C. Mehta v. Kamal Nath (1997) 1 SCC 388, the Hon’ble Supreme Court firmly held that open public spaces and parks are held by public authorities in solemn trust for the public and cannot be alienated, encroached, or diverted for non-park uses.',
-        '4. VIOLATION OF FUNDAMENTAL RIGHTS: That deprivation and degradation of designated green lung areas violates the Right to a Clean, Wholesome Environment and Healthy Living guaranteed as a core facet of the Right to Life under Article 21 of the Constitution.',
-        '5. REPRESENTATIONS UNHEEDED: That despite multiple detailed written representations submitted to the Municipal Commissioner and Development Authority, no anti-encroachment or sanitization drives have been initiated.'
-      ];
-      const newUltimatum = 'PRAYER: Wherefore, in the light of the above facts, the Petitioner respectfully prays that this Hon’ble Court be pleased to issue a Writ of Mandamus or other appropriate direction directing the Respondent Authorities to immediately remove all illegal encroachments, restore the green canopy and boundary fences of the public park, and institute routine judicial compliance monitoring.';
-      const newSignOff = 'Respectfully Submitted,\nCounsel for the Petitioner\nAdvocate in Public Interest';
+      // Switch active template to Public Park PIL
+      const parkTemplate = MASTER_TEMPLATES.find((t) => t.id === 'pil-public-park') || MASTER_TEMPLATES[0];
+      setSelectedTemplate(parkTemplate);
+
+      const newTitle = parkTemplate.title;
+      const newHeading = parkTemplate.heading;
+      const newTo = parkTemplate.toPlaceholder;
+      const newSubject = parkTemplate.subject;
+      const newClauses = parkTemplate.bodyClauses;
+      const newUltimatum = parkTemplate.ultimatum;
+      const newSignOff = parkTemplate.signOffTitle;
 
       setDocTitle(newTitle);
       setDraftHeading(newHeading);
-      setDraftTo(newTo);
+      setDraftTo(newTo.replace(/^(to\s*,?\s*\n?)/i, '').trim());
       setDraftSubject(newSubject);
       setDraftClauses(newClauses);
       setDraftUltimatum(newUltimatum);
@@ -922,6 +1049,7 @@ export default function DraftingStudio({
       setDraftDate(new Date().toLocaleDateString('en-IN'));
       setIsDraftGenerated(true);
       setSaveStatus('Public Park Petition Generated');
+      canvasScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
 
       api.saveDraft({
         id: `draft-${Date.now()}`,
@@ -939,11 +1067,10 @@ export default function DraftingStudio({
         const aiReply = {
           id: (Date.now() + 1).toString(),
           sender: 'ai' as const,
-          text: 'I have drafted a comprehensive Public Interest Litigation (PIL) under Article 226 of the Constitution of India for the protection and removal of encroachments from the public park. The draft invokes the Public Trust Doctrine (citing Bangalore Medical Trust v. B.S. Muddappa and M.C. Mehta) and fundamental rights under Article 21. The document canvas on the left has been updated with the complete pleading and prayer.',
+          text: `I have drafted a comprehensive Public Interest Litigation (PIL) under Article 226 for the protection of the public park.\n\nPlease provide the following details to replace the placeholders:\n1. 🏛️ High Court Name\n2. 🌳 Park Demarcation & Location\n3. ✍️ Petitioner / Citizen Name\n\n👉 Fill them in the form above or reply here in chat.`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setMessages((prev) => [...prev, aiReply]);
-        setActiveMobileView('canvas');
       }, 400);
 
     } else if (pLower.startsWith('add clause') || pLower.startsWith('add a clause') || pLower.includes('add clause')) {
@@ -963,6 +1090,44 @@ export default function DraftingStudio({
       }, 400);
 
     } else {
+      // Check if user is conversationally providing data inputs (e.g. "landlord is Ramesh Sharma, rent is 20000")
+      const extractedData = extractFieldsFromText(promptText);
+      if (Object.keys(extractedData).length > 0) {
+        setFormValues((prev) => ({ ...prev, ...extractedData }));
+
+        setDraftTo((prev) => substitutePlaceholders(prev, extractedData));
+        setDraftSubject((prev) => substitutePlaceholders(prev, extractedData));
+        setDraftClauses((clauses) => clauses.map((c) => substitutePlaceholders(c, extractedData)));
+        setDraftUltimatum((prev) => substitutePlaceholders(prev, extractedData));
+        setDraftSignOff((prev) => substitutePlaceholders(prev, extractedData));
+        setSaveStatus('Canvas details updated');
+
+        const labelsMap: Record<string, string> = {
+          landlordName: 'Landlord Full Name',
+          landlordAddress: 'Landlord Address',
+          premisesAddress: 'Rented Premises Address',
+          contractedRent: 'Current Agreed Rent',
+          demandedRent: 'Demanded / Hiked Rent',
+          agreementDate: 'Agreement Date',
+          tenantName: 'Tenant Name'
+        };
+
+        const summaryList = Object.entries(extractedData)
+          .map(([k, v]) => `• **${labelsMap[k] || k}**: ${v}`)
+          .join('\n');
+
+        setTimeout(() => {
+          const aiReply = {
+            id: (Date.now() + 1).toString(),
+            sender: 'ai' as const,
+            text: `Got it! I have updated the legal draft with your provided information:\n\n${summaryList}\n\nThe canvas on the left has been refreshed and the corresponding yellow placeholders have been replaced with your actual details.`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setMessages((prev) => [...prev, aiReply]);
+        }, 400);
+
+        return;
+      }
       // Dynamic General Drafting / Revision Handler
       try {
         const draftRes = await api.generateDraft({
@@ -1676,20 +1841,22 @@ export default function DraftingStudio({
                       <div className="space-y-3.5 mb-6 font-sans">
                         <p className="text-slate-700">
                           <span className="font-semibold">Date:</span>{' '}
-                          <span className="bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] px-2.5 py-0.5 rounded text-xs font-mono font-semibold">
-                            {draftDate || (isDraftGenerated ? new Date().toLocaleDateString('en-IN') : '[MISSING]')}
+                          <span className="text-slate-800 font-mono text-xs font-semibold">
+                            {draftDate || new Date().toLocaleDateString('en-IN')}
                           </span>
                         </p>
 
                         <div className="text-slate-700">
-                          <p>To,</p>
-                          <span className="bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] px-2.5 py-0.5 rounded text-xs font-mono font-semibold inline-block mt-0.5 whitespace-pre-line">
-                            {draftTo}
-                          </span>
+                          <p className="font-semibold text-slate-800">To,</p>
+                          <div className="mt-1 whitespace-pre-line font-sans text-slate-800 leading-snug">
+                            {renderWithPlaceholders(draftTo.replace(/^(to\s*,?\s*\n?)/i, '').trim())}
+                          </div>
                         </div>
 
                         <p className="pt-1.5">
-                          <span className="font-bold text-[#0F172A] text-base">Subject: {draftSubject}</span>
+                          <span className="font-bold text-[#0F172A] text-base">
+                            Subject: {renderWithPlaceholders(draftSubject)}
+                          </span>
                         </p>
                       </div>
 
@@ -1698,34 +1865,23 @@ export default function DraftingStudio({
                         <ol className="list-decimal pl-6 space-y-3 text-justify">
                           {draftClauses.map((clause, idx) => (
                             <li key={idx} className="leading-relaxed">
-                              {clause.replace(/^\d+[\.\)]\s*/, '').split('[CONFIRM:').map((chunk, cIdx) => {
-                                if (cIdx === 0) return chunk;
-                                const [placeholder, rest] = chunk.split(']');
-                                return (
-                                  <React.Fragment key={cIdx}>
-                                    <span className="bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A] px-2 py-0.5 rounded text-xs font-mono font-semibold font-sans">
-                                      {isDraftGenerated ? 'Confirmed' : `[CONFIRM:${placeholder}]`}
-                                    </span>
-                                    {rest}
-                                  </React.Fragment>
-                                );
-                              })}
+                              {renderWithPlaceholders(clause.replace(/^\d+[\.\)]\s*/, ''))}
                             </li>
                           ))}
                         </ol>
 
                         {draftUltimatum && (
                           <p className="text-justify pt-2 font-serif leading-relaxed">
-                            {draftUltimatum}
+                            {renderWithPlaceholders(draftUltimatum)}
                           </p>
                         )}
 
                         {/* Sign-off */}
                         <div className="pt-6 font-sans space-y-1">
-                          <p className="text-slate-700">Yours faithfully,</p>
-                          <p className="font-bold text-[#0F172A] pt-3 text-base whitespace-pre-line">
-                            {draftSignOff}
-                          </p>
+                          <p className="text-slate-700 font-medium">Yours faithfully,</p>
+                          <div className="font-bold text-[#0F172A] pt-3 text-base whitespace-pre-line">
+                            {renderWithPlaceholders(draftSignOff.replace(/^(yours faithfully,?\s*\n?)/i, '').trim())}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1896,7 +2052,7 @@ export default function DraftingStudio({
                         </div>
                       ))}
 
-                      {/* Generate Draft Button */}
+                      {/* Generate / Apply Draft Button */}
                       <button
                         type="submit"
                         disabled={isGenerating}
@@ -1905,11 +2061,11 @@ export default function DraftingStudio({
                         {isGenerating ? (
                           <>
                             <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            <span>Generating Tailored Draft...</span>
+                            <span>Updating Document...</span>
                           </>
                         ) : (
                           <>
-                            <span>Generate Draft</span>
+                            <span>{isDraftGenerated ? 'Apply to Document' : 'Generate Draft'}</span>
                             <ArrowRight className="w-3.5 h-3.5" />
                           </>
                         )}
@@ -1929,7 +2085,7 @@ export default function DraftingStudio({
                             ? 'bg-[#1E3A8A] text-white rounded-tr-sm'
                             : 'bg-[#F8FAFC] border border-[#E2E8F0] text-slate-800 rounded-tl-sm shadow-2xs'
                         }`}>
-                          <p>{msg.text}</p>
+                          <p className="whitespace-pre-line">{msg.text}</p>
                           <span className={`text-[10px] block mt-1 ${msg.sender === 'user' ? 'text-blue-200 text-right' : 'text-slate-400'}`}>
                             {msg.time}
                           </span>
@@ -1954,7 +2110,7 @@ export default function DraftingStudio({
                     type="text"
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Ask DraftMate to revise, add clauses..."
+                    placeholder="Provide details (e.g. Landlord is Ramesh, rent is 20000) or revise..."
                     className="flex-1 px-3 py-1.5 bg-white border border-[#CBD5E1] rounded-full text-xs placeholder-slate-400 focus:outline-none focus:border-[#1E3A8A] transition-all"
                   />
 
