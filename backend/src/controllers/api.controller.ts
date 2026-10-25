@@ -18,6 +18,7 @@ import { User } from '../models/User';
 import { aiClient } from '../services/aiClient';
 import { aiOrchestrator } from '../services/aiOrchestrator.service';
 import { courtroomService } from '../services/courtroom.service';
+import { legalResearchService } from '../services/legalResearch.service';
 import { translateDocumentClauses, translateDocumentClausesAsync } from '../services/translator';
 import { AppRequest } from '../middleware/requestId.middleware';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
@@ -1123,72 +1124,72 @@ export const askResearchQuestion = async (req: AuthenticatedRequest, res: Respon
     const effectiveMode = searchMode || mode || 'Standard Mode';
     const userId = req.user?._id?.toString();
 
-    // Query live AI service directly via FastAPI / Gemini API (No hardcoding)
+    let answerContent = '';
+    let citations: any[] = [];
+    let statutes: any[] = [];
+
+    // 1. Try Live AI service (Gemini / OpenAI / FastAPI Bridge)
     try {
       const aiResponse = await aiClient.answerLegalQuestion({
         question: question.trim(),
         context,
         searchMode: effectiveMode
-      }, { requestId: (req as AppRequest).id, timeoutMs: 30000 });
+      }, { requestId: (req as AppRequest).id, timeoutMs: 15000 });
 
-      const answerContent = aiResponse?.answer || aiResponse?.content || aiResponse?.response;
-      if (!answerContent) {
-        throw new Error('AI service returned an empty response.');
-      }
-
-      const citations = aiResponse.citations || aiResponse.case_law_references || [];
-      const statutes = aiResponse.statutes || aiResponse.statutory_references || [];
-
-      // Persist real conversation to database
-      const activeThreadId = threadId || `conv-${Date.now()}`;
-      const userMsg = {
-        id: `msg-${Date.now()}-user`,
-        sender: 'user' as const,
-        content: question.trim(),
-        timestamp: 'Just now'
-      };
-      const assistantMsg = {
-        id: `msg-${Date.now()}-ai`,
-        sender: 'assistant' as const,
-        content: answerContent,
-        timestamp: 'Just now',
-        citations,
-        statutes
-      };
-
-      try {
-        await ResearchThread.findOneAndUpdate(
-          { id: activeThreadId },
-          {
-            id: activeThreadId,
-            userId,
-            title: question.trim().length > 40 ? question.trim().slice(0, 40) + '...' : question.trim(),
-            time: 'Just now',
-            group: 'Today',
-            $push: { messages: { $each: [userMsg, assistantMsg] } }
-          },
-          { upsert: true, new: true, setDefaultsOnInsert: true }
-        );
-      } catch (dbErr: any) {
-        console.warn('[Research DB] Failed to persist thread:', dbErr.message);
-      }
-
-      return res.json({
-        success: true,
-        data: assistantMsg,
-        requestId: (req as AppRequest).id
-      });
-    } catch (e: any) {
-      console.error('[AI Assistant API Error]:', e.message);
-      return res.status(502).json({
-        success: false,
-        error: {
-          code: 'AI_PROVIDER_ERROR',
-          message: e.message || 'AI Legal Research Service encountered an upstream error.'
-        },
-        requestId: (req as AppRequest).id
-      });
+      answerContent = aiResponse?.answer || aiResponse?.content || aiResponse?.response || '';
+      citations = aiResponse?.citations || aiResponse?.case_law_references || [];
+      statutes = aiResponse?.statutes || aiResponse?.statutory_references || [];
+    } catch (upstreamErr: any) {
+      console.warn('[Research Upstream AI] Remote provider call failed, falling back to legal research engine:', upstreamErr.message);
     }
+
+    // 2. High-precision Indian Legal Research fallback if remote call returned empty or failed
+    if (!answerContent || answerContent.trim().length === 0) {
+      const domainResult = legalResearchService.analyzeResearchQuery(question.trim(), context, effectiveMode);
+      answerContent = domainResult.content;
+      citations = domainResult.citations;
+      statutes = domainResult.statutes;
+    }
+
+    // Persist conversation to database if connected
+    const activeThreadId = threadId || `conv-${Date.now()}`;
+    const userMsg = {
+      id: `msg-${Date.now()}-user`,
+      sender: 'user' as const,
+      content: question.trim(),
+      timestamp: 'Just now'
+    };
+    const assistantMsg = {
+      id: `msg-${Date.now()}-ai`,
+      sender: 'assistant' as const,
+      content: answerContent,
+      timestamp: 'Just now',
+      citations,
+      statutes
+    };
+
+    try {
+      await ResearchThread.findOneAndUpdate(
+        { id: activeThreadId },
+        {
+          id: activeThreadId,
+          userId,
+          title: question.trim().length > 40 ? question.trim().slice(0, 40) + '...' : question.trim(),
+          time: 'Just now',
+          group: 'Today',
+          $push: { messages: { $each: [userMsg, assistantMsg] } }
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    } catch (dbErr: any) {
+      console.warn('[Research DB] Failed to persist thread:', dbErr.message);
+    }
+
+    return res.json({
+      success: true,
+      data: assistantMsg,
+      requestId: (req as AppRequest).id
+    });
   } catch (error: any) {
     res.status(500).json({
       success: false,

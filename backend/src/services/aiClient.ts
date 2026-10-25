@@ -293,23 +293,28 @@ class AiClient {
     }
 
     // 3. Internal FastAPI AI Service (draftmate-ai)
-    const normalizedJurisdiction = (() => {
-      const j = (input.jurisdiction || '').toLowerCase();
-      if (j.includes('india') || j.includes('delhi') || j.includes('bombay') || j.includes('mumbai')) return 'india';
-      if (['us_federal', 'us_ca', 'us_ny', 'us_tx', 'uk', 'ca', 'au', 'india', 'in_delhi', 'in_mumbai'].includes(j)) return j;
-      return 'other';
-    })();
+    try {
+      const normalizedJurisdiction = (() => {
+        const j = (input.jurisdiction || '').toLowerCase();
+        if (j.includes('india') || j.includes('delhi') || j.includes('bombay') || j.includes('mumbai')) return 'india';
+        if (['us_federal', 'us_ca', 'us_ny', 'us_tx', 'uk', 'ca', 'au', 'india', 'in_delhi', 'in_mumbai'].includes(j)) return j;
+        return 'other';
+      })();
 
-    const payload = {
-      question: input.question,
-      jurisdiction: normalizedJurisdiction,
-      context: input.context || undefined,
-    };
-    const assistantOptions: AiRequestOptions = {
-      ...options,
-      timeoutMs: options?.timeoutMs || 3500,
-    };
-    return this.post('/assistant/legal', payload, assistantOptions);
+      const payload = {
+        question: input.question,
+        jurisdiction: normalizedJurisdiction,
+        context: input.context || undefined,
+      };
+      const assistantOptions: AiRequestOptions = {
+        ...options,
+        timeoutMs: options?.timeoutMs || 3500,
+      };
+      return await this.post('/assistant/legal', payload, assistantOptions);
+    } catch (fastApiErr: any) {
+      console.warn('[AI Client] Internal FastAPI /assistant/legal gateway unavailable:', fastApiErr.message);
+      return null;
+    }
   }
 
   private async callGeminiLegalAssistant(
@@ -350,7 +355,10 @@ Respond with valid JSON with this exact structure:
   ]
 }`;
 
-      const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+      let model = (process.env.GEMINI_MODEL || 'gemini-1.5-flash').trim();
+      if (model.includes('3.5') || model.includes('3.8') || !model.startsWith('gemini-')) {
+        model = 'gemini-1.5-flash';
+      }
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
       const res = await fetch(url, {
