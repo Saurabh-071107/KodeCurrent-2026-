@@ -512,21 +512,22 @@ export default function DraftingStudio({
   const [draftSearchQuery, setDraftSearchQuery] = useState('');
 
   // Active Template / Document State
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateDefinition>(MASTER_TEMPLATES[0]);
-  const [docTitle, setDocTitle] = useState(MASTER_TEMPLATES[0].title);
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateDefinition | null>(null);
+  const [docTitle, setDocTitle] = useState('Untitled Draft');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [saveStatus, setSaveStatus] = useState('Saved');
+  const [saveStatus, setSaveStatus] = useState('Ready');
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Dynamic Live Document Canvas State
-  const [draftHeading, setDraftHeading] = useState(MASTER_TEMPLATES[0].heading);
+  const [draftHeading, setDraftHeading] = useState('');
   const [draftDate, setDraftDate] = useState('');
-  const [draftTo, setDraftTo] = useState(MASTER_TEMPLATES[0].toPlaceholder);
-  const [draftSubject, setDraftSubject] = useState(MASTER_TEMPLATES[0].subject);
-  const [draftClauses, setDraftClauses] = useState<string[]>(MASTER_TEMPLATES[0].bodyClauses);
-  const [draftUltimatum, setDraftUltimatum] = useState(MASTER_TEMPLATES[0].ultimatum);
-  const [draftSignOff, setDraftSignOff] = useState(MASTER_TEMPLATES[0].signOffTitle);
+  const [draftTo, setDraftTo] = useState('');
+  const [draftSubject, setDraftSubject] = useState('');
+  const [draftClauses, setDraftClauses] = useState<string[]>([]);
+  const [draftUltimatum, setDraftUltimatum] = useState('');
+  const [draftSignOff, setDraftSignOff] = useState('');
+  const [freeformText, setFreeformText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const canvasScrollRef = useRef<HTMLDivElement>(null);
 
@@ -538,17 +539,11 @@ export default function DraftingStudio({
   // Dynamic Questionnaire Form Values
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [isDraftGenerated, setIsDraftGenerated] = useState(false);
+  const [activeQuestionnaire, setActiveQuestionnaire] = useState<TemplateDefinition | null>(null);
 
   // Chat message & input
   const [chatInput, setChatInput] = useState('');
-  const [messages, setMessages] = useState<Array<{ id: string; sender: 'ai' | 'user'; text: string; time: string }>>([
-    {
-      id: '1',
-      sender: 'ai',
-      text: "Let's prepare your legal draft. I'll guide you with a few details to generate a professional, statutory-compliant document.",
-      time: '10:24 AM'
-    }
-  ]);
+  const [messages, setMessages] = useState<Array<{ id: string; sender: 'ai' | 'user'; text: string; time: string }>>([]);
 
   // Active Tab for AI Assistant
   const [aiTab, setAiTab] = useState<'Chat' | 'Details' | 'Reference' | 'Templates'>('Chat');
@@ -587,11 +582,6 @@ export default function DraftingStudio({
           const r = (parsed.role || parsed.onboarding?.role) as UserRoleType;
           if (r && ['advocate', 'citizen', 'firm', 'student'].includes(r)) {
             setCurrentRole(r);
-            const matched = templatesList.find((t) => t.role === r) || MASTER_TEMPLATES.find((t) => t.role === r);
-            if (matched) {
-              setSelectedTemplate(matched);
-              setDocTitle(matched.title);
-            }
           }
           if (parsed.name) {
             setUserName(parsed.name.startsWith('Adv.') ? parsed.name : parsed.name);
@@ -647,9 +637,29 @@ export default function DraftingStudio({
     }
   };
 
-  // Switch active template
+  // Reset canvas and chat to completely blank document
+  const handleResetToBlankDraft = (title: string = 'Untitled Draft') => {
+    setDocTitle(title);
+    setDraftHeading('');
+    setDraftDate('');
+    setDraftTo('');
+    setDraftSubject('');
+    setDraftClauses([]);
+    setDraftUltimatum('');
+    setDraftSignOff('');
+    setFreeformText('');
+    setFormValues({});
+    setSelectedTemplate(null);
+    setActiveQuestionnaire(null);
+    setIsDraftGenerated(false);
+    setMessages([]);
+    setSaveStatus('Blank Canvas Ready');
+  };
+
+  // Switch active template on explicit user request
   const handleSelectTemplate = (tmpl: TemplateDefinition) => {
     setSelectedTemplate(tmpl);
+    setActiveQuestionnaire(tmpl);
     setDocTitle(tmpl.title);
     setCurrentRole(tmpl.role);
     setFormValues({});
@@ -659,16 +669,16 @@ export default function DraftingStudio({
     setDraftClauses(tmpl.bodyClauses);
     setDraftUltimatum(tmpl.ultimatum);
     setDraftSignOff(tmpl.signOffTitle);
-    setDraftDate('');
-    setIsDraftGenerated(false);
-    setSaveStatus('Draft loaded');
+    setDraftDate(new Date().toLocaleDateString('en-IN'));
+    setIsDraftGenerated(true);
+    setSaveStatus('Template loaded');
     setTemplatePickerOpen(false);
     setMessages((prev) => [
       ...prev,
       {
         id: Date.now().toString(),
         sender: 'ai',
-        text: `Switched skill to "${tmpl.skillName}". Please provide the following details to generate your customized ${tmpl.title}.`,
+        text: `Loaded template: "${tmpl.title}". You can edit the text directly on the canvas, fill in the questionnaire above, or instruct me to customize clauses.`,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
     ]);
@@ -676,44 +686,15 @@ export default function DraftingStudio({
 
   // Option 1: Prompt for Draft Name Before Opening
   const handleCreateNewDraft = () => {
-    const matched = templatesList.find((t) => t.role === currentRole) || templatesList[0] || MASTER_TEMPLATES[0];
     setNewDraftTitle('');
-    setNewDraftTemplateId(matched.id);
     setIsNewDraftModalOpen(true);
   };
 
-  // Confirm Creation with User-Entered Draft Name
+  // Confirm Creation with User-Entered Draft Name: Always opens a blank canvas with clean chat
   const handleConfirmCreateNewDraft = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const trimmedTitle = newDraftTitle.trim();
-    if (!trimmedTitle) return;
-
-    const matched = templatesList.find((t) => t.id === newDraftTemplateId) || 
-      templatesList.find((t) => t.role === currentRole) || 
-      templatesList[0] || 
-      MASTER_TEMPLATES[0];
-
-    setSelectedTemplate(matched);
-    setDocTitle(trimmedTitle);
-    setCurrentRole(matched.role as UserRoleType);
-    setFormValues({});
-    setDraftHeading(matched.heading);
-    setDraftSubject(matched.subject);
-    setDraftTo(matched.toPlaceholder);
-    setDraftClauses(matched.bodyClauses);
-    setDraftUltimatum(matched.ultimatum);
-    setDraftSignOff(matched.signOffTitle);
-    setDraftDate('');
-    setIsDraftGenerated(false);
-    setSaveStatus('Draft created');
-    setMessages([
-      {
-        id: Date.now().toString(),
-        sender: 'ai',
-        text: `New draft "${trimmedTitle}" created using skill "${matched.skillName}". Please complete the questionnaire or type instructions below to generate your clauses.`,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }
-    ]);
+    const trimmedTitle = newDraftTitle.trim() || 'Untitled Draft';
+    handleResetToBlankDraft(trimmedTitle);
     setIsNewDraftModalOpen(false);
     setViewMode('editor');
   };
@@ -738,6 +719,7 @@ export default function DraftingStudio({
       signOffTitle: draft.signOffTitle || '[Authorized Signatory]'
     };
     setSelectedTemplate(matchingTemplate);
+    setActiveQuestionnaire(null);
     setDocTitle(draft.title);
     setCurrentRole(draft.role);
     setDraftHeading(draft.heading || draft.title.toUpperCase());
@@ -747,6 +729,7 @@ export default function DraftingStudio({
     setDraftUltimatum(draft.ultimatum || '');
     setDraftSignOff(draft.signOffTitle || '[Authorized Signatory]');
     setDraftDate(draft.lastEdited || new Date().toLocaleDateString('en-IN'));
+    setFreeformText('');
     setIsDraftGenerated(true);
     setSaveStatus(`Opened from ${draft.lastEdited}`);
     setViewMode('editor');
@@ -790,8 +773,6 @@ export default function DraftingStudio({
   const handleRoleChange = (newRole: UserRoleType) => {
     setCurrentRole(newRole);
     setRoleSwitcherOpen(false);
-    const firstMatching = MASTER_TEMPLATES.find((t) => t.role === newRole) || MASTER_TEMPLATES[0];
-    handleSelectTemplate(firstMatching);
 
     const roleLabels: Record<UserRoleType, string> = {
       advocate: 'Advocate · High Court',
@@ -827,23 +808,24 @@ export default function DraftingStudio({
     setIsGenerating(true);
     setSaveStatus('Applying details to document...');
 
+    const activeTmpl = activeQuestionnaire || selectedTemplate || MASTER_TEMPLATES[0];
     const todayDate = new Date().toLocaleDateString('en-IN');
-    let generatedHeading = selectedTemplate.heading;
-    let generatedSubject = substitutePlaceholders(selectedTemplate.subject, formValues);
-    let generatedTo = substitutePlaceholders(selectedTemplate.toPlaceholder, formValues);
-    let generatedClauses = selectedTemplate.bodyClauses.map((clause) =>
+    let generatedHeading = activeTmpl.heading;
+    let generatedSubject = substitutePlaceholders(activeTmpl.subject, formValues);
+    let generatedTo = substitutePlaceholders(activeTmpl.toPlaceholder, formValues);
+    let generatedClauses = activeTmpl.bodyClauses.map((clause) =>
       substitutePlaceholders(clause, formValues)
     );
-    let generatedUltimatum = substitutePlaceholders(selectedTemplate.ultimatum, formValues);
-    let generatedSignOff = substitutePlaceholders(selectedTemplate.signOffTitle, formValues);
+    let generatedUltimatum = substitutePlaceholders(activeTmpl.ultimatum, formValues);
+    let generatedSignOff = substitutePlaceholders(activeTmpl.signOffTitle, formValues);
 
     // Call backend API if online
     try {
       const apiRes = await api.generateDraft({
-        documentType: selectedTemplate.category,
+        documentType: activeTmpl.category,
         facts: formValues,
-        templateId: selectedTemplate.id,
-        customInstructions: selectedTemplate.title
+        templateId: activeTmpl.id,
+        customInstructions: activeTmpl.title
       });
       if (apiRes.success && apiRes.data) {
         if (apiRes.data.heading) generatedHeading = apiRes.data.heading;
@@ -860,6 +842,7 @@ export default function DraftingStudio({
     }
 
     // Update live Canvas State
+    setSelectedTemplate(activeTmpl);
     setDraftHeading(generatedHeading);
     setDraftSubject(generatedSubject);
     setDraftTo(generatedTo.replace(/^(to\s*,?\s*\n?)/i, '').trim());
@@ -869,6 +852,7 @@ export default function DraftingStudio({
     setDraftDate(todayDate);
     setIsDraftGenerated(true);
     setIsGenerating(false);
+    setActiveQuestionnaire(null);
     setSaveStatus('Draft updated just now');
     canvasScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -877,12 +861,12 @@ export default function DraftingStudio({
     const updatedDraft: SavedDraftItem = {
       id: existingIndex >= 0 ? savedDrafts[existingIndex].id : `draft-${Date.now()}`,
       title: docTitle,
-      category: selectedTemplate.category,
+      category: activeTmpl.category,
       role: currentRole,
       lastEdited: 'Just now',
       wordsCount: [generatedHeading, generatedSubject, ...generatedClauses, generatedUltimatum].join(' ').split(/\s+/).filter(Boolean).length,
       preview: `${generatedSubject} for ${Object.values(formValues)[0] || 'Client'}`,
-      templateId: selectedTemplate.id,
+      templateId: activeTmpl.id,
       heading: generatedHeading,
       subject: generatedSubject,
       bodyClauses: generatedClauses,
@@ -902,7 +886,7 @@ export default function DraftingStudio({
     const newMsg = {
       id: Date.now().toString(),
       sender: 'ai' as const,
-      text: `Draft successfully generated for ${selectedTemplate.title}. Verified statutory clauses and terms have been inserted into the canvas with your specified details.`,
+      text: `Draft successfully generated for ${activeTmpl.title}. Verified statutory clauses and terms have been inserted into the canvas with your specified details.`,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     setMessages((prev) => [...prev, newMsg]);
@@ -1132,7 +1116,7 @@ export default function DraftingStudio({
       try {
         const draftRes = await api.generateDraft({
           customInstructions: promptText,
-          documentType: selectedTemplate.category,
+          documentType: selectedTemplate?.category || 'Legal Document',
           facts: formValues
         });
 
@@ -1399,7 +1383,7 @@ export default function DraftingStudio({
             {/* The 2 Primary Starter Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
               
-              {/* Card 1: Create New Draft (AI-POWERED) */}
+              {/* Card 1: Create New Draft (BLANK CANVAS & AI) */}
               <div 
                 onClick={handleCreateNewDraft}
                 className="bg-white rounded-2xl sm:rounded-3xl border border-[#E2E8F0] p-6 sm:p-7 shadow-xs hover:shadow-md hover:border-[#1E3A8A]/40 transition-all cursor-pointer flex flex-col justify-between min-h-[220px] group"
@@ -1410,7 +1394,7 @@ export default function DraftingStudio({
                       <Plus className="w-5 h-5 stroke-[2.5]" />
                     </div>
                     <span className="text-[10px] font-bold tracking-wider text-[#2563EB] bg-[#EFF6FF] border border-[#BFDBFE] px-2.5 py-1 rounded-full uppercase">
-                      AI-POWERED
+                      BLANK CANVAS &amp; AI
                     </span>
                   </div>
 
@@ -1418,12 +1402,12 @@ export default function DraftingStudio({
                     Create New Draft
                   </h3>
                   <p className="text-xs sm:text-sm text-[#64748B] mt-2.5 leading-relaxed">
-                    Start a fresh document with interactive AI generation or select multi-document synthesis.
+                    Start with a fresh, clean blank page to type freely or prompt the AI Assistant to generate customized clauses.
                   </p>
                 </div>
 
                 <div className="pt-4 flex items-center gap-1.5 text-xs font-semibold text-[#1E3A8A] group-hover:translate-x-1 transition-transform">
-                  <span>Start with AI</span>
+                  <span>Start Blank Draft</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </div>
               </div>
@@ -1677,14 +1661,33 @@ export default function DraftingStudio({
                     className="flex items-center gap-2 px-3 py-1.5 bg-white border border-[#DECDB8] rounded-xl text-xs font-medium text-[#0F172A] shadow-2xs hover:bg-[#FAF8F5] transition-all cursor-pointer"
                   >
                     <FileText className="w-3.5 h-3.5 text-[#1E3A8A]" />
-                    <span>{selectedTemplate.skillName}</span>
+                    <span>{selectedTemplate ? selectedTemplate.skillName : 'Blank Document'}</span>
                     <ChevronDown className="w-3 h-3 text-slate-500" />
                   </button>
 
                   {templatePickerOpen && (
                     <div className="absolute left-0 mt-1.5 w-72 bg-white border border-[#DECDB8] rounded-2xl shadow-xl py-2 z-40 text-xs max-h-80 overflow-y-auto">
                       <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        Switch Document Template
+                        Document Mode
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleResetToBlankDraft('Blank Draft');
+                          setTemplatePickerOpen(false);
+                        }}
+                        className={`w-full text-left px-3.5 py-2 hover:bg-[#FAF5EB] transition-colors flex items-center justify-between cursor-pointer ${
+                          !selectedTemplate ? 'font-bold text-[#1E3A8A] bg-[#EBF2FC]' : 'text-slate-700'
+                        }`}
+                      >
+                        <div>
+                          <p className="font-semibold">Blank Document</p>
+                          <p className="text-[10px] text-slate-400">Empty canvas · Freeform typing</p>
+                        </div>
+                        {!selectedTemplate && <Check className="w-3.5 h-3.5 text-[#1E3A8A]" />}
+                      </button>
+                      <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-t border-slate-100 mt-1">
+                        Templates
                       </div>
                       {MASTER_TEMPLATES.map((tmpl) => (
                         <button
@@ -1692,19 +1695,30 @@ export default function DraftingStudio({
                           type="button"
                           onClick={() => handleSelectTemplate(tmpl)}
                           className={`w-full text-left px-3.5 py-2 hover:bg-[#FAF5EB] transition-colors flex items-center justify-between cursor-pointer ${
-                            selectedTemplate.id === tmpl.id ? 'font-bold text-[#1E3A8A] bg-[#EBF2FC]' : 'text-slate-700'
+                            selectedTemplate?.id === tmpl.id ? 'font-bold text-[#1E3A8A] bg-[#EBF2FC]' : 'text-slate-700'
                           }`}
                         >
                           <div>
                             <p className="font-semibold">{tmpl.title}</p>
                             <p className="text-[10px] text-slate-400 capitalize">{tmpl.category} · {tmpl.role}</p>
                           </div>
-                          {selectedTemplate.id === tmpl.id && <Check className="w-3.5 h-3.5 text-[#1E3A8A]" />}
+                          {selectedTemplate?.id === tmpl.id && <Check className="w-3.5 h-3.5 text-[#1E3A8A]" />}
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
+
+                {/* Blank Page Quick Action Button */}
+                <button
+                  type="button"
+                  onClick={() => handleResetToBlankDraft('New Blank Draft')}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#DECDB8] hover:bg-[#FAF8F5] text-xs font-semibold text-slate-700 rounded-xl transition-all cursor-pointer shadow-2xs"
+                  title="Clear canvas to a fresh blank page"
+                >
+                  <Plus className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Blank Page</span>
+                </button>
 
               </div>
 
@@ -1831,59 +1845,92 @@ export default function DraftingStudio({
                   <div className="w-full max-w-[860px] bg-white rounded-xl shadow-md border border-[#E5E0D5] p-6 sm:p-10 md:p-12 relative text-slate-900 text-sm sm:text-[14.5px] leading-relaxed font-serif min-h-[720px] flex flex-col justify-between select-text">
                     
                     {/* Paper Content */}
-                    <div>
-                      {/* Centered Document Title */}
-                      <h3 className="font-serif-title text-center text-xl sm:text-2xl font-bold tracking-[0.2em] text-[#0F172A] mb-8 uppercase whitespace-pre-line">
-                        {draftHeading}
-                      </h3>
+                    <div className="flex-1 flex flex-col">
+                      {(draftHeading || draftSubject || draftClauses.length > 0) ? (
+                        <div>
+                          {/* Centered Document Title */}
+                          {draftHeading && (
+                            <h3 className="font-serif-title text-center text-xl sm:text-2xl font-bold tracking-[0.2em] text-[#0F172A] mb-8 uppercase whitespace-pre-line">
+                              {draftHeading}
+                            </h3>
+                          )}
 
-                      {/* Date & Addressee */}
-                      <div className="space-y-3.5 mb-6 font-sans">
-                        <p className="text-slate-700">
-                          <span className="font-semibold">Date:</span>{' '}
-                          <span className="text-slate-800 font-mono text-xs font-semibold">
-                            {draftDate || new Date().toLocaleDateString('en-IN')}
-                          </span>
-                        </p>
+                          {/* Date & Addressee */}
+                          <div className="space-y-3.5 mb-6 font-sans">
+                            {draftDate && (
+                              <p className="text-slate-700">
+                                <span className="font-semibold">Date:</span>{' '}
+                                <span className="text-slate-800 font-mono text-xs font-semibold">
+                                  {draftDate}
+                                </span>
+                              </p>
+                            )}
 
-                        <div className="text-slate-700">
-                          <p className="font-semibold text-slate-800">To,</p>
-                          <div className="mt-1 whitespace-pre-line font-sans text-slate-800 leading-snug">
-                            {renderWithPlaceholders(draftTo.replace(/^(to\s*,?\s*\n?)/i, '').trim())}
+                            {draftTo && (
+                              <div className="text-slate-700">
+                                <p className="font-semibold text-slate-800">To,</p>
+                                <div className="mt-1 whitespace-pre-line font-sans text-slate-800 leading-snug">
+                                  {renderWithPlaceholders(draftTo.replace(/^(to\s*,?\s*\n?)/i, '').trim())}
+                                </div>
+                              </div>
+                            )}
+
+                            {draftSubject && (
+                              <p className="pt-1.5">
+                                <span className="font-bold text-[#0F172A] text-base">
+                                  Subject: {renderWithPlaceholders(draftSubject)}
+                                </span>
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Body Clauses */}
+                          <div className="space-y-4 text-slate-800 leading-relaxed font-serif">
+                            {draftClauses.length > 0 && (
+                              <ol className="list-decimal pl-6 space-y-3 text-justify">
+                                {draftClauses.map((clause, idx) => (
+                                  <li key={idx} className="leading-relaxed">
+                                    {renderWithPlaceholders(clause.replace(/^\d+[\.\)]\s*/, ''))}
+                                  </li>
+                                ))}
+                              </ol>
+                            )}
+
+                            {draftUltimatum && (
+                              <p className="text-justify pt-2 font-serif leading-relaxed">
+                                {renderWithPlaceholders(draftUltimatum)}
+                              </p>
+                            )}
+
+                            {/* Sign-off */}
+                            {draftSignOff && (
+                              <div className="pt-6 font-sans space-y-1">
+                                <p className="text-slate-700 font-medium">Yours faithfully,</p>
+                                <div className="font-bold text-[#0F172A] pt-3 text-base whitespace-pre-line">
+                                  {renderWithPlaceholders(draftSignOff.replace(/^(yours faithfully,?\s*\n?)/i, '').trim())}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
-
-                        <p className="pt-1.5">
-                          <span className="font-bold text-[#0F172A] text-base">
-                            Subject: {renderWithPlaceholders(draftSubject)}
-                          </span>
-                        </p>
-                      </div>
-
-                      {/* Body Clauses */}
-                      <div className="space-y-4 text-slate-800 leading-relaxed font-serif">
-                        <ol className="list-decimal pl-6 space-y-3 text-justify">
-                          {draftClauses.map((clause, idx) => (
-                            <li key={idx} className="leading-relaxed">
-                              {renderWithPlaceholders(clause.replace(/^\d+[\.\)]\s*/, ''))}
-                            </li>
-                          ))}
-                        </ol>
-
-                        {draftUltimatum && (
-                          <p className="text-justify pt-2 font-serif leading-relaxed">
-                            {renderWithPlaceholders(draftUltimatum)}
-                          </p>
-                        )}
-
-                        {/* Sign-off */}
-                        <div className="pt-6 font-sans space-y-1">
-                          <p className="text-slate-700 font-medium">Yours faithfully,</p>
-                          <div className="font-bold text-[#0F172A] pt-3 text-base whitespace-pre-line">
-                            {renderWithPlaceholders(draftSignOff.replace(/^(yours faithfully,?\s*\n?)/i, '').trim())}
+                      ) : (
+                        /* Blank Canvas View: Pristine Editable Paper Sheet */
+                        <div className="flex-1 flex flex-col min-h-[580px]">
+                          <div className="mb-4 pb-2 border-b border-[#F0EBE0] flex items-center justify-between text-xs text-slate-400 font-sans">
+                            <span className="font-bold text-slate-700 text-sm tracking-wide">
+                              {docTitle || 'Untitled Draft'}
+                            </span>
+                            <span>{new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                           </div>
+                          <textarea
+                            value={freeformText}
+                            onChange={(e) => setFreeformText(e.target.value)}
+                            placeholder="Start typing your draft here, paste legal text, or ask the AI Assistant on the right to draft provisions..."
+                            className="w-full flex-1 bg-transparent resize-none text-slate-900 font-serif text-sm sm:text-[15px] leading-relaxed placeholder-slate-400 focus:outline-none min-h-[520px]"
+                            autoFocus
+                          />
                         </div>
-                      </div>
+                      )}
                     </div>
 
                     {/* Supreme Court Watermark Inside Paper (Bottom-Right) */}
@@ -1898,9 +1945,22 @@ export default function DraftingStudio({
 
                     {/* Paper Status Footer */}
                     <div className="mt-8 pt-4 border-t border-[#F0EBE0] flex flex-wrap items-center justify-between text-xs text-slate-500 font-sans">
-                      <span>Words: {[draftHeading, draftSubject, draftTo, ...draftClauses, draftUltimatum, draftSignOff].join(' ').split(/\s+/).filter(Boolean).length} · Characters: {[draftHeading, draftSubject, draftTo, ...draftClauses, draftUltimatum, draftSignOff].join(' ').length.toLocaleString()}</span>
+                      <span>
+                        Words:{' '}
+                        {((draftHeading || draftSubject || draftClauses.length > 0)
+                          ? [draftHeading, draftSubject, draftTo, ...draftClauses, draftUltimatum, draftSignOff].join(' ')
+                          : freeformText
+                        ).split(/\s+/).filter(Boolean).length}{' '}
+                        · Characters:{' '}
+                        {((draftHeading || draftSubject || draftClauses.length > 0)
+                          ? [draftHeading, draftSubject, draftTo, ...draftClauses, draftUltimatum, draftSignOff].join(' ')
+                          : freeformText
+                        ).length.toLocaleString()}
+                      </span>
                       <span className="italic text-slate-400">
-                        {isDraftGenerated ? 'Draft prepared for statutory review' : 'Draft for review · Not yet finalised'}
+                        {(draftHeading || draftSubject || draftClauses.length > 0)
+                          ? (isDraftGenerated ? 'Draft prepared for statutory review' : 'Draft for review · Not yet finalised')
+                          : (freeformText.trim() ? 'Editing draft · Auto-saved' : 'Blank Document · Ready for typing')}
                       </span>
                     </div>
 
@@ -1963,7 +2023,7 @@ export default function DraftingStudio({
                             setAiTab('Chat');
                           }}
                           className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                            selectedTemplate.id === tmpl.id
+                            selectedTemplate?.id === tmpl.id
                               ? 'bg-[#EBF2FC] border-[#1E3A8A]/40'
                               : 'bg-[#FAF8F5] border-[#DECDB8] hover:border-[#1E3A8A]/40'
                           }`}
@@ -1981,99 +2041,110 @@ export default function DraftingStudio({
                   </div>
                 ) : (
                   /* Chat Body (Scrollable) */
-                  <div className="p-4 space-y-3.5 flex-1 overflow-y-auto text-xs">
+                  <div className="p-4 space-y-3.5 flex-1 overflow-y-auto text-xs flex flex-col">
                     
-                    {/* Message 1 from AI */}
-                    <div className="flex items-start gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-[#FAF5EB] border border-[#DECDB8] flex items-center justify-center text-[#8C7355] flex-shrink-0 mt-0.5">
-                        <Scale className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="flex-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl rounded-tl-sm p-3 text-slate-800 shadow-2xs">
-                        <p className="leading-relaxed">
-                          Let&apos;s prepare your <strong>{selectedTemplate.title}</strong>. I&apos;ll guide you with a few details to generate a professional draft.
-                        </p>
-                        <span className="text-[10px] text-slate-400 block mt-1.5">10:24 AM</span>
-                      </div>
-                    </div>
-
-                    {/* Selected Skill Selector Card */}
-                    <div className="pl-9 space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                        Selected Skill
-                      </label>
-                      <div 
-                        onClick={() => setTemplatePickerOpen(true)}
-                        className="bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl p-2.5 flex items-center justify-between hover:border-[#1E3A8A]/50 cursor-pointer transition-all"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-[#EBF2FC] text-[#1E3A8A] flex items-center justify-center flex-shrink-0">
-                            <FileText className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-xs text-[#0F172A] leading-tight">{selectedTemplate.skillName}</h4>
-                            <p className="text-[11px] text-slate-500 leading-tight">{selectedTemplate.skillDesc}</p>
-                          </div>
+                    {/* Pristine Empty State when chat is clear and no questionnaire active */}
+                    {messages.length === 0 && !activeQuestionnaire && (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-500 my-auto">
+                        <div className="w-12 h-12 rounded-2xl bg-[#FAF0DE] border border-[#DECDB8] text-[#8C7355] flex items-center justify-center mb-3 shadow-2xs">
+                          <Sparkles className="w-5 h-5 text-[#1E3A8A]" />
                         </div>
-                        <ChevronDown className="w-4 h-4 text-slate-400" />
-                      </div>
-                    </div>
-
-                    {/* Message 2 from AI: Prompt for details */}
-                    <div className="flex items-start gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-[#FAF5EB] border border-[#DECDB8] flex items-center justify-center text-[#8C7355] flex-shrink-0 mt-0.5">
-                        <Scale className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="flex-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl rounded-tl-sm p-3 text-slate-800 shadow-2xs">
-                        <p className="leading-relaxed font-medium text-[#0F172A]">
-                          Please provide the following details:
+                        <h4 className="font-bold text-sm text-[#0F172A] mb-1">AI Assistant Ready</h4>
+                        <p className="text-xs text-slate-500 max-w-[270px] leading-relaxed mb-5">
+                          Start a new draft by typing your instructions below, attaching a document, or choosing a template from the Templates tab.
                         </p>
-                        <span className="text-[10px] text-slate-400 block mt-1">10:24 AM</span>
-                      </div>
-                    </div>
 
-                    {/* Dynamic Interactive Questionnaire Card */}
-                    <form onSubmit={handleGenerateDraft} className="pl-9 space-y-2.5">
-                      {selectedTemplate.formFields.map((field, idx) => (
-                        <div key={field.id} className="space-y-1">
-                          <label className="flex items-center gap-1.5 text-xs font-semibold text-[#0F172A]">
-                            <span className="w-4 h-4 rounded-full bg-[#F1F5F9] text-slate-600 text-[10px] font-bold flex items-center justify-center">
-                              {idx + 1}
-                            </span>
-                            <span>{field.label}</span>
-                            {field.required && <span className="text-red-500">*</span>}
-                          </label>
-                          <input
-                            type="text"
-                            value={formValues[field.id] || ''}
-                            onChange={(e) => handleInputChange(field.id, e.target.value)}
-                            placeholder={field.placeholder}
-                            className="w-full px-3 py-2 bg-white border border-[#CBD5E1] rounded-lg text-xs placeholder-slate-400 focus:outline-none focus:border-[#1E3A8A] transition-all"
-                          />
+                        <div className="w-full space-y-2 text-left">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1">
+                            Quick Starters
+                          </p>
+                          {[
+                            'Draft a legal notice for recovery of unpaid dues',
+                            'Draft an urgent bail application under Section 437/439 CrPC',
+                            'Draft a mutual commercial non-disclosure agreement (NDA)'
+                          ].map((promptText, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setChatInput(promptText)}
+                              className="w-full text-left p-2.5 bg-[#FAF8F5] hover:bg-[#F1F5F9] border border-[#DECDB8] hover:border-[#1E3A8A]/40 rounded-xl text-xs text-slate-700 transition-all flex items-center justify-between group cursor-pointer shadow-2xs"
+                            >
+                              <span className="truncate pr-2">{promptText}</span>
+                              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#1E3A8A] transition-colors flex-shrink-0" />
+                            </button>
+                          ))}
                         </div>
-                      ))}
+                      </div>
+                    )}
 
-                      {/* Generate / Apply Draft Button */}
-                      <button
-                        type="submit"
-                        disabled={isGenerating}
-                        className="w-full py-2.5 mt-2 bg-[#1E3A8A] hover:bg-[#162A65] text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-60"
-                      >
-                        {isGenerating ? (
-                          <>
-                            <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            <span>Updating Document...</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>{isDraftGenerated ? 'Apply to Document' : 'Generate Draft'}</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </>
-                        )}
-                      </button>
-                    </form>
+                    {/* Active Questionnaire Card (Only when a template is explicitly chosen) */}
+                    {activeQuestionnaire && (
+                      <div className="bg-[#FAF8F5] border border-[#DECDB8] rounded-2xl p-3.5 space-y-3 mb-2 shadow-2xs">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-[#EBF2FC] text-[#1E3A8A] flex items-center justify-center flex-shrink-0">
+                              <FileText className="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-xs text-[#0F172A] leading-tight">{activeQuestionnaire.title}</h4>
+                              <span className="text-[10px] text-slate-400">{activeQuestionnaire.skillName}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setActiveQuestionnaire(null)}
+                            className="text-[10px] text-slate-400 hover:text-slate-700 font-semibold cursor-pointer px-1.5 py-0.5 rounded hover:bg-slate-100"
+                            title="Dismiss questionnaire"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
 
-                    {/* Dynamic Follow-up Messages */}
-                    {messages.slice(1).map((msg) => (
+                        <p className="text-[11px] text-slate-600 leading-snug">{activeQuestionnaire.skillDesc}</p>
+
+                        <form onSubmit={handleGenerateDraft} className="space-y-2 pt-1">
+                          {activeQuestionnaire.formFields.map((field, idx) => (
+                            <div key={field.id} className="space-y-1">
+                              <label className="flex items-center gap-1.5 text-xs font-semibold text-[#0F172A]">
+                                <span className="w-4 h-4 rounded-full bg-[#F1F5F9] text-slate-600 text-[10px] font-bold flex items-center justify-center">
+                                  {idx + 1}
+                                </span>
+                                <span>{field.label}</span>
+                                {field.required && <span className="text-red-500">*</span>}
+                              </label>
+                              <input
+                                type="text"
+                                value={formValues[field.id] || ''}
+                                onChange={(e) => handleInputChange(field.id, e.target.value)}
+                                placeholder={field.placeholder}
+                                className="w-full px-3 py-1.5 bg-white border border-[#CBD5E1] rounded-lg text-xs placeholder-slate-400 focus:outline-none focus:border-[#1E3A8A] transition-all"
+                              />
+                            </div>
+                          ))}
+
+                          <button
+                            type="submit"
+                            disabled={isGenerating}
+                            className="w-full py-2 bg-[#1E3A8A] hover:bg-[#162A65] text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-2 shadow-2xs transition-all cursor-pointer disabled:opacity-60"
+                          >
+                            {isGenerating ? (
+                              <>
+                                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                <span>Generating Clauses...</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>Generate Clauses for Canvas</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </>
+                            )}
+                          </button>
+                        </form>
+                      </div>
+                    )}
+
+                    {/* Dynamic Messages Stream */}
+                    {messages.map((msg) => (
                       <div key={msg.id} className={`flex items-start gap-2.5 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
                         {msg.sender === 'ai' && (
                           <div className="w-7 h-7 rounded-full bg-[#FAF5EB] border border-[#DECDB8] flex items-center justify-center text-[#8C7355] flex-shrink-0 mt-0.5">
