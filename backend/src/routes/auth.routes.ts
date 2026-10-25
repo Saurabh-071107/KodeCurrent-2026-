@@ -27,8 +27,8 @@ router.post('/refresh', refreshToken);
 router.post('/logout', logout);
 router.post('/logout-all', authenticateToken, logoutAll);
 
-// Onboarding Details
-router.post('/onboarding', optionalAuthenticateToken, updateOnboarding);
+// Onboarding Details (Strictly Authenticated)
+router.post('/onboarding', authenticateToken, updateOnboarding);
 
 // Authenticated User profile
 router.get('/me', authenticateToken, getMe);

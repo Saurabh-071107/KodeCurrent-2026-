@@ -334,4 +334,47 @@ export const api = {
       return { success: false, message: e.message };
     }
   },
+
+  // --- Session & Refresh Management ---
+  refreshToken: async (): Promise<ApiResponse> => {
+    try {
+      const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('draftmate_refresh_token') : null;
+      if (!refreshToken) return { success: false, message: 'No refresh token stored' };
+
+      const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      const data = await res.json();
+      if (data.success && data.token && typeof window !== 'undefined') {
+        localStorage.setItem('draftmate_token', data.token);
+        if (data.refreshToken) {
+          localStorage.setItem('draftmate_refresh_token', data.refreshToken);
+        }
+      }
+      return data;
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  logout: async (): Promise<void> => {
+    try {
+      const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('draftmate_refresh_token') : null;
+      if (refreshToken) {
+        await fetch(`${API_BASE_URL}/auth/logout`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ refreshToken }),
+        });
+      }
+    } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('draftmate_token');
+        localStorage.removeItem('draftmate_refresh_token');
+        localStorage.removeItem('draftmate_user');
+      }
+    }
+  },
 };

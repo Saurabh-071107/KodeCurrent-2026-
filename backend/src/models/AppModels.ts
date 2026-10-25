@@ -87,6 +87,7 @@ export const Draft = model<IDraft>('Draft', draftSchema);
 // 3. Case Item
 export interface ICaseItem extends Document {
   id: string;
+  userId?: string;
   cnr: string;
   title: string;
   court: string;
@@ -141,6 +142,7 @@ export interface ICaseItem extends Document {
 
 const caseSchema = new Schema<ICaseItem>({
   id: { type: String, required: true, unique: true },
+  userId: { type: String, index: true },
   cnr: { type: String, required: true, unique: true },
   title: { type: String, required: true },
   court: { type: String, required: true },
@@ -171,6 +173,7 @@ export const CaseModel = model<ICaseItem>('Case', caseSchema);
 // 4. Client
 export interface IClient extends Document {
   id: string;
+  userId?: string;
   name: string;
   type: string; // 'Individual' | 'Corporate'
   initials: string;
@@ -190,6 +193,7 @@ export interface IClient extends Document {
 
 const clientSchema = new Schema<IClient>({
   id: { type: String, required: true, unique: true },
+  userId: { type: String, index: true },
   name: { type: String, required: true },
   type: { type: String, default: 'Individual' },
   initials: { type: String },

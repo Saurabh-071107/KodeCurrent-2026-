@@ -48,6 +48,7 @@ export interface RedlineInput {
 
 export interface LegalAssistantInput {
   question: string;
+  jurisdiction?: string;
   context?: string;
 }
 
@@ -132,41 +133,91 @@ class AiClient {
 
   /**
    * Fact Extraction (POST /facts)
+   * Validates against FactExtractionRequest Pydantic schema
    */
   async extractFacts(input: FactExtractionInput, options?: AiRequestOptions): Promise<any> {
+    const desc = input.problemDescription || '';
+    const safeDesc = desc.trim().length >= 10 ? desc.trim() : `${desc.trim()} (Detailed factual statement required for extraction)`;
+    const safeObjective = (input.objective || 'Prepare structured legal draft').trim();
+
     const payload = {
-      problem_description: input.problemDescription,
+      problem_description: safeDesc,
       document_type: input.documentType || 'legal_notice',
       jurisdiction: input.jurisdiction || 'other',
-      objective: input.objective,
+      objective: safeObjective.length >= 5 ? safeObjective : 'Drafting review',
       parties: input.parties || [],
       important_dates: input.importantDates || [],
-      context: input.context,
+      context: input.context || undefined,
     };
     return this.post('/facts', payload, options);
   }
 
   /**
    * Draft Generation (POST /draft)
+   * Requires FactExtractionResponse structure in facts
    */
   async generateDraft(input: DraftGenerationInput, options?: AiRequestOptions): Promise<any> {
+    // If facts is already a FactExtractionResponse, use directly; otherwise adapt to schema
+    const rawFacts = input.facts || {};
+    const shapedFacts = rawFacts.user_provided_facts ? rawFacts : {
+      user_provided_facts: [
+        {
+          fact: typeof rawFacts === 'string' ? rawFacts : JSON.stringify(rawFacts),
+          source_text: 'User provided context',
+          confidence: 1.0,
+          is_assumption: false
+        }
+      ],
+      inferred_facts: [],
+      parties_and_roles: rawFacts.recipient ? [
+        { name: rawFacts.recipient, role: 'respondent', confidence: 1.0, reasoning: 'Opposing party' }
+      ] : [],
+      important_dates: rawFacts.agreementDate ? [
+        { date: rawFacts.agreementDate.slice(0, 10), description: 'Agreement Date', is_approximate: false }
+      ] : [],
+      desired_outcome: rawFacts.objective || 'Generate legal draft',
+      missing_information: [],
+      contradictions: [],
+      follow_up_questions: [],
+      assumptions: [],
+      uncertainties: []
+    };
+
     const payload = {
-      document_type: input.documentType,
-      facts: input.facts,
+      document_type: input.documentType || 'legal_notice',
+      facts: shapedFacts,
       jurisdiction: input.jurisdiction || 'other',
-      custom_instructions: input.customInstructions,
-      template_id: input.templateId,
+      custom_instructions: input.customInstructions || undefined,
+      template_id: input.templateId || undefined,
     };
     return this.post('/draft', payload, options);
   }
 
   /**
    * Citation Verification (POST /citations/verify)
+   * Adapts text into DraftResponse structure expected by CitationVerificationRequest
    */
   async verifyCitations(input: CitationVerificationInput, options?: AiRequestOptions): Promise<any> {
     const payload = {
-      text: input.text,
-      citations: input.citations || [],
+      draft: {
+        document_type: 'legal_notice',
+        title: 'Document Citation Verification',
+        sections: [
+          {
+            title: 'Substantive Clauses',
+            content: input.text,
+            order: 1,
+            is_placeholder: false
+          }
+        ],
+        assumptions: [],
+        warnings: [],
+        placeholders: [],
+        review_status: 'ready_for_review',
+        disclaimer: 'Verification check'
+      },
+      jurisdiction: 'other',
+      citation_ids: input.citations || []
     };
     return this.post('/citations/verify', payload, options);
   }
@@ -176,21 +227,38 @@ class AiClient {
    */
   async reviewDocument(input: ReviewDocumentInput, options?: AiRequestOptions): Promise<any> {
     const payload = {
-      document_text: input.documentText,
-      document_type: input.documentType || 'legal_notice',
+      draft: {
+        document_type: input.documentType || 'legal_notice',
+        title: 'Document for Review',
+        sections: [
+          {
+            title: 'Content',
+            content: input.documentText,
+            order: 1,
+            is_placeholder: false
+          }
+        ],
+        assumptions: [],
+        warnings: [],
+        placeholders: [],
+        review_status: 'ready_for_review',
+        disclaimer: 'Review analysis'
+      },
+      facts: {
+        user_provided_facts: [],
+        inferred_facts: [],
+        parties_and_roles: [],
+        important_dates: [],
+        desired_outcome: 'Document Review',
+        missing_information: [],
+        contradictions: [],
+        follow_up_questions: [],
+        assumptions: [],
+        uncertainties: []
+      },
+      jurisdiction: 'other'
     };
     return this.post('/review', payload, options);
-  }
-
-  /**
-   * Redline Generation (POST /redline)
-   */
-  async createRedline(input: RedlineInput, options?: AiRequestOptions): Promise<any> {
-    const payload = {
-      original_text: input.originalText,
-      modified_text: input.modifiedText,
-    };
-    return this.post('/redline', payload, options);
   }
 
   /**
@@ -199,7 +267,8 @@ class AiClient {
   async answerLegalQuestion(input: LegalAssistantInput, options?: AiRequestOptions): Promise<any> {
     const payload = {
       question: input.question,
-      context: input.context,
+      jurisdiction: input.jurisdiction || 'other',
+      context: input.context || undefined,
     };
     return this.post('/assistant/legal', payload, options);
   }
@@ -208,10 +277,29 @@ class AiClient {
    * Export Document (POST /export)
    */
   async exportDocument(input: ExportInput, options?: AiRequestOptions): Promise<any> {
+    const safeTitle = (input.title || 'Legal_Document').replace(/[^a-zA-Z0-9_-]/g, '_');
     const payload = {
-      content: input.content,
+      draft: {
+        document_type: 'legal_notice',
+        title: input.title || 'Legal Document',
+        sections: [
+          {
+            title: 'Document Body',
+            content: input.content,
+            order: 1,
+            is_placeholder: false
+          }
+        ],
+        assumptions: [],
+        warnings: [],
+        placeholders: [],
+        review_status: 'ready_for_review',
+        disclaimer: 'Exported legal document'
+      },
       format: input.format,
-      title: input.title || 'Legal_Document',
+      include_comments: false,
+      include_changes_summary: false,
+      filename: safeTitle
     };
     return this.post('/export', payload, options);
   }
