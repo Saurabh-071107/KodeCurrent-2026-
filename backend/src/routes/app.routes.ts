@@ -34,77 +34,90 @@ import {
   askCitizenQuestion,
   getCitizenGlossary,
   handleVoiceCommand,
-  confirmVoiceAction
+  confirmVoiceAction,
+  uploadDocument,
+  listDocuments,
+  deleteDocument
 } from '../controllers/api.controller';
+import { authenticateToken } from '../middleware/auth.middleware';
 
 const router = Router();
 
-// 1. Dashboard & Notifications
-router.get('/dashboard/stats', getDashboardStats);
-router.get('/notifications', getNotifications);
-router.patch('/notifications/:id/read', markNotificationRead);
-
-// 2. Templates
-router.get('/templates', getTemplates);
-router.get('/templates/:id', getTemplateById);
-
-// 3. Drafts & Generation
-router.get('/drafts', getDrafts);
-router.get('/drafts/:id', getDraftById);
-router.post('/drafts', saveDraft);
-router.post('/drafts/precheck', preCheckDraft);
-router.post('/ai/drafts/precheck', preCheckDraft);
-router.post('/drafts/generate', generateDraft);
-router.post('/ai/drafts/generate', generateDraft);
-router.get('/drafts/:id/versions', getDraftVersions);
-
-// 4. Export
-router.post('/ai/export', exportDocument);
-router.post('/export', exportDocument);
-
-// 5. Case Tracker
-router.get('/tracker/cases', getCases);
-router.get('/cases', getCases);
-router.get('/tracker/cases/:cnr', getCaseByCnr);
-router.get('/cases/:id', getCaseByCnr);
-router.get('/cases/:id/timeline', getCaseTimeline);
-router.post('/cases/:id/events', addCaseEvent);
-
-// 6. Clients & Matters
-router.get('/clients', getClients);
-router.get('/clients/:id', getClientById);
-router.post('/clients/:id/notes', addClientNote);
-router.post('/clients/:id/communications', addClientCommunication);
-
-// 7. Bare Acts & Library
+// -------------------------------------------------------------------
+// Public Knowledge & Catalog Routes (Unauthenticated)
+// -------------------------------------------------------------------
 router.get('/bare-acts', getBareActs);
 router.get('/library', getLibraryData);
-
-// 8. Verification & Review
-router.get('/verify/sample', getVerificationReport);
-router.post('/verify', verifyDocumentWithAi);
-router.post('/ai/documents/verify', verifyDocumentWithAi);
-
-// 9. Research
-router.get('/research/threads', getResearchThreads);
-router.post('/research/chat', askResearchQuestion);
-router.post('/ai/research/chat', askResearchQuestion);
-
-// 10. Student Center
-router.get('/student/assets', getStudentAssets);
-router.post('/student/courtroom/sessions/:id/turns', submitCourtroomTurn);
-router.post('/student/tests/:id/submit', submitExam);
-
-// 11. Translation
-router.get('/translation/data', getTranslationData);
-router.post('/translation/jobs', createTranslationJob);
-
-// 12. Citizen Helpline
-router.post('/citizen/ask', askCitizenQuestion);
 router.get('/citizen/glossary', getCitizenGlossary);
+router.get('/templates', getTemplates);
+router.get('/templates/:id', getTemplateById);
+router.get('/verify/sample', getVerificationReport);
 
-// 13. Voice Gateway
-router.post('/ai/voice/command', handleVoiceCommand);
-router.post('/ai/voice/confirm', confirmVoiceAction);
+// -------------------------------------------------------------------
+// Protected Application Routes (Strictly Authenticated)
+// -------------------------------------------------------------------
+
+// 1. Dashboard & Notifications
+router.get('/dashboard/stats', authenticateToken, getDashboardStats);
+router.get('/notifications', authenticateToken, getNotifications);
+router.patch('/notifications/:id/read', authenticateToken, markNotificationRead);
+
+// 2. Drafts & AI Generation (Scoped to user)
+router.get('/drafts', authenticateToken, getDrafts);
+router.get('/drafts/:id', authenticateToken, getDraftById);
+router.post('/drafts', authenticateToken, saveDraft);
+router.post('/drafts/precheck', authenticateToken, preCheckDraft);
+router.post('/ai/drafts/precheck', authenticateToken, preCheckDraft);
+router.post('/drafts/generate', authenticateToken, generateDraft);
+router.post('/ai/drafts/generate', authenticateToken, generateDraft);
+router.get('/drafts/:id/versions', authenticateToken, getDraftVersions);
+
+// 3. Export (Owner verified)
+router.post('/ai/export', authenticateToken, exportDocument);
+router.post('/export', authenticateToken, exportDocument);
+
+// 4. Case Tracker (Scoped to user)
+router.get('/tracker/cases', authenticateToken, getCases);
+router.get('/cases', authenticateToken, getCases);
+router.get('/tracker/cases/:cnr', authenticateToken, getCaseByCnr);
+router.get('/cases/:id', authenticateToken, getCaseByCnr);
+router.get('/cases/:id/timeline', authenticateToken, getCaseTimeline);
+router.post('/cases/:id/events', authenticateToken, addCaseEvent);
+
+// 5. Clients & Matters (Scoped to user)
+router.get('/clients', authenticateToken, getClients);
+router.get('/clients/:id', authenticateToken, getClientById);
+router.post('/clients/:id/notes', authenticateToken, addClientNote);
+router.post('/clients/:id/communications', authenticateToken, addClientCommunication);
+
+// 6. Verification & Review
+router.post('/verify', authenticateToken, verifyDocumentWithAi);
+router.post('/ai/documents/verify', authenticateToken, verifyDocumentWithAi);
+
+// 7. Research (Scoped to user)
+router.get('/research/threads', authenticateToken, getResearchThreads);
+router.post('/research/chat', authenticateToken, askResearchQuestion);
+router.post('/ai/research/chat', authenticateToken, askResearchQuestion);
+
+// 8. Student Center
+router.get('/student/assets', authenticateToken, getStudentAssets);
+router.post('/student/courtroom/sessions/:id/turns', authenticateToken, submitCourtroomTurn);
+router.post('/student/tests/:id/submit', authenticateToken, submitExam);
+
+// 9. Translation
+router.get('/translation/data', authenticateToken, getTranslationData);
+router.post('/translation/jobs', authenticateToken, createTranslationJob);
+
+// 10. Citizen Helpline
+router.post('/citizen/ask', authenticateToken, askCitizenQuestion);
+
+// 11. Voice Gateway
+router.post('/ai/voice/command', authenticateToken, handleVoiceCommand);
+router.post('/ai/voice/confirm', authenticateToken, confirmVoiceAction);
+
+// 12. Document Uploads & Storage (Strictly Authenticated)
+router.post('/documents/upload', authenticateToken, uploadDocument);
+router.get('/documents', authenticateToken, listDocuments);
+router.delete('/documents/:id', authenticateToken, deleteDocument);
 
 export default router;

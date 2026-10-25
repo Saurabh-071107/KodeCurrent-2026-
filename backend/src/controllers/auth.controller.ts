@@ -8,7 +8,7 @@ import { sendOtpSms, checkRouteCredits, getDeliveryReport } from '../services/sm
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 
 /**
- * Hash a refresh token using SHA-256 for secure DB persistence
+ * Hash a token or OTP using SHA-256 for secure DB persistence
  */
 const hashToken = (token: string): string => {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -50,10 +50,10 @@ const generateTokenPair = async (userId: string, mobile: string, role: string, i
 };
 
 /**
- * Generate 6-digit random numeric OTP
+ * Generate cryptographically secure 6-digit numeric OTP
  */
 const generateOtp = (): string => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return crypto.randomInt(100000, 999999).toString();
 };
 
 /**
@@ -62,6 +62,11 @@ const generateOtp = (): string => {
 const cleanMobileNumber = (raw: string): string => {
   return raw ? raw.replace(/\D/g, '').slice(-10) : '';
 };
+
+/**
+ * Allowed roles for self-registration. Privileged roles like admin/firm_admin require explicit verified invites.
+ */
+const ALLOWED_SELF_ROLES = ['advocate', 'student', 'citizen'];
 
 /**
  * STEP 1: Send OTP to Mobile
@@ -75,7 +80,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
     if (!mobile || !/^[6-9]\d{9}$/.test(mobile)) {
       res.status(400).json({
         success: false,
-        message: 'Please provide a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.',
+        error: { code: 'INVALID_MOBILE', message: 'Please provide a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.' },
       });
       return;
     }
@@ -87,19 +92,50 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       if (existingUser) {
         res.status(409).json({
           success: false,
-          message: 'An account with this mobile number already exists. Please log in instead.',
+          error: { code: 'ACCOUNT_EXISTS', message: 'An account with this mobile number already exists. Please log in instead.' },
+        });
+        return;
+      }
+    }
+
+    // Check existing OTP for lock status or cooldown
+    const existingOtp = await Otp.findOne({ mobile });
+    if (existingOtp) {
+      if (existingOtp.isLocked && existingOtp.expiresAt > new Date()) {
+        res.status(423).json({
+          success: false,
+          error: { code: 'OTP_LOCKED', message: 'Too many failed attempts. This number is locked for OTP verification. Please wait a few minutes before trying again.' }
+        });
+        return;
+      }
+
+      // 60-second resend cooldown
+      const secondsSinceLastRequest = (Date.now() - new Date(existingOtp.lastRequestedAt || existingOtp.createdAt).getTime()) / 1000;
+      if (secondsSinceLastRequest < 60) {
+        const remainingSeconds = Math.ceil(60 - secondsSinceLastRequest);
+        res.status(429).json({
+          success: false,
+          error: { code: 'RESEND_COOLDOWN', message: `Please wait ${remainingSeconds} seconds before requesting a new OTP.` }
         });
         return;
       }
     }
 
     const otpCode = generateOtp();
+    const otpHash = hashToken(otpCode);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes validity
 
-    // Upsert OTP record
+    // Upsert OTP record storing only SHA-256 hash
     await Otp.findOneAndUpdate(
       { mobile },
-      { otp: otpCode, verified: false, expiresAt },
+      {
+        otpHash,
+        verified: false,
+        attempts: 0,
+        isLocked: false,
+        expiresAt,
+        lastRequestedAt: new Date()
+      },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
@@ -109,7 +145,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
     if (!smsResult.success) {
       res.status(502).json({
         success: false,
-        message: smsResult.error || 'Failed to send OTP via SMS gateway.',
+        error: { code: 'SMS_GATEWAY_ERROR', message: smsResult.error || 'Failed to send OTP via SMS gateway.' },
       });
       return;
     }
@@ -121,11 +157,10 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       expiresInSeconds: 300,
     });
   } catch (error: any) {
-    console.error('[Auth Controller] Error in sendOtp:', error);
+    console.error('[Auth Controller] Error in sendOtp:', error.message);
     res.status(500).json({
       success: false,
-      message: 'Internal server error while sending OTP.',
-      error: error?.message,
+      error: { code: 'INTERNAL_ERROR', message: 'Internal server error while sending OTP.' },
     });
   }
 };
@@ -143,40 +178,64 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     if (!mobile || !otp || otp.length !== 6) {
       res.status(400).json({
         success: false,
-        message: 'Please provide both mobile number and a 6-digit OTP code.',
+        error: { code: 'INVALID_INPUT', message: 'Please provide both mobile number and a 6-digit OTP code.' },
       });
       return;
     }
 
-    const isMasterBypass = otp === '123456';
+    // Bypass is strictly isolated to explicit automated test environments
+    const isMasterBypass =
+      process.env.NODE_ENV === 'test' &&
+      process.env.ALLOW_TEST_OTP_BYPASS === 'true' &&
+      otp === '123456';
 
-    // Find valid OTP record or bypass with master OTP
-    let record = null;
-    if (isMasterBypass) {
-      console.log(`[Auth Controller] Master bypass OTP (123456) accepted for mobile: ${mobile}`);
-      record = await Otp.findOneAndUpdate(
-        { mobile },
-        { otp: '123456', verified: true, expiresAt: new Date(Date.now() + 15 * 60 * 1000) },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
-    } else {
-      record = await Otp.findOne({
-        mobile,
-        otp,
-        expiresAt: { $gt: new Date() },
-      });
-    }
+    const record = await Otp.findOne({ mobile, expiresAt: { $gt: new Date() } });
 
     if (!record) {
       res.status(400).json({
         success: false,
-        message: 'Invalid or expired OTP code. Please check and try again or request a new code.',
+        error: { code: 'OTP_EXPIRED_OR_NOT_FOUND', message: 'Invalid or expired OTP code. Please request a new code.' },
       });
       return;
     }
 
-    // Mark as verified
+    if (record.isLocked) {
+      res.status(423).json({
+        success: false,
+        error: { code: 'OTP_LOCKED', message: 'Too many incorrect attempts. This OTP is locked. Please request a new OTP.' },
+      });
+      return;
+    }
+
+    const inputHash = hashToken(otp);
+    const isMatch = isMasterBypass || record.otpHash === inputHash;
+
+    if (!isMatch) {
+      record.attempts = (record.attempts || 0) + 1;
+      const maxAttempts = record.maxAttempts || 5;
+
+      if (record.attempts >= maxAttempts) {
+        record.isLocked = true;
+        await record.save();
+        res.status(423).json({
+          success: false,
+          error: { code: 'MAX_ATTEMPTS_EXCEEDED', message: 'Maximum verification attempts exceeded. Please request a new OTP.' }
+        });
+        return;
+      }
+
+      await record.save();
+      const remainingAttempts = maxAttempts - record.attempts;
+      res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_OTP', message: `Incorrect OTP. ${remainingAttempts} attempts remaining.` },
+      });
+      return;
+    }
+
+    // Mark as verified and reset attempts
     record.verified = true;
+    record.attempts = 0;
     await record.save();
 
     res.status(200).json({
@@ -186,11 +245,10 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       mobile,
     });
   } catch (error: any) {
-    console.error('[Auth Controller] Error in verifyOtp:', error);
+    console.error('[Auth Controller] Error in verifyOtp:', error.message);
     res.status(500).json({
       success: false,
-      message: 'Internal server error while verifying OTP.',
-      error: error?.message,
+      error: { code: 'INTERNAL_ERROR', message: 'Internal server error while verifying OTP.' },
     });
   }
 };
@@ -205,12 +263,12 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const mobile = cleanMobileNumber(rawMobile);
     const name = req.body.name ? String(req.body.name).trim() : '';
     const password = req.body.password ? String(req.body.password) : '';
-    const role = req.body.role || 'user';
+    const requestedRole = req.body.role;
 
     if (!mobile || !name || !password) {
       res.status(400).json({
         success: false,
-        message: 'Name, mobile number, and password are required for registration.',
+        error: { code: 'MISSING_FIELDS', message: 'Name, mobile number, and password are required for registration.' },
       });
       return;
     }
@@ -218,7 +276,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     if (name.length < 2) {
       res.status(400).json({
         success: false,
-        message: 'Name must be at least 2 characters long.',
+        error: { code: 'INVALID_NAME', message: 'Name must be at least 2 characters long.' },
       });
       return;
     }
@@ -226,22 +284,25 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     if (password.length < 6) {
       res.status(400).json({
         success: false,
-        message: 'Password must be at least 6 characters long.',
+        error: { code: 'WEAK_PASSWORD', message: 'Password must be at least 6 characters long.' },
       });
       return;
     }
+
+    // Role Sanitization: Never allow caller to self-assign admin/firm_admin
+    const safeRole = ALLOWED_SELF_ROLES.includes(requestedRole) ? requestedRole : 'advocate';
 
     // Check if user already exists
     const existingUser = await User.findOne({ mobile });
     if (existingUser) {
       res.status(409).json({
         success: false,
-        message: 'An account with this mobile number already exists. Please log in.',
+        error: { code: 'USER_EXISTS', message: 'An account with this mobile number already exists. Please log in.' },
       });
       return;
     }
 
-    // Verify that OTP was verified for this mobile
+    // Verify that OTP was completed for this mobile
     const verifiedOtp = await Otp.findOne({
       mobile,
       verified: true,
@@ -251,26 +312,26 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     if (!verifiedOtp) {
       res.status(403).json({
         success: false,
-        message: 'Mobile number has not been verified via OTP, or OTP session expired. Please verify again.',
+        error: { code: 'UNVERIFIED_PHONE', message: 'Mobile number has not been verified via OTP, or OTP session expired. Please verify again.' },
       });
       return;
     }
 
-    // Create user in MongoDB with onboarding role initialized
+    // Create user in MongoDB with sanitized role
     const user = await User.create({
       mobile,
       name,
       password,
-      role,
+      role: safeRole,
       isVerified: true,
       onboarding: {
-        completed: Boolean(role && role !== 'user'),
-        role: role || 'advocate',
+        completed: Boolean(safeRole && safeRole !== 'user'),
+        role: safeRole,
         completedAt: new Date(),
       },
     });
 
-    // Delete verified OTP record
+    // Invalidate verified OTP so it cannot be reused
     await Otp.deleteMany({ mobile });
 
     // Generate Access & Refresh Tokens
@@ -298,11 +359,10 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       },
     });
   } catch (error: any) {
-    console.error('[Auth Controller] Error in register:', error);
+    console.error('[Auth Controller] Error in register:', error.message);
     res.status(500).json({
       success: false,
-      message: 'Internal server error during registration.',
-      error: error?.message,
+      error: { code: 'REGISTRATION_ERROR', message: 'Internal server error during registration.' },
     });
   }
 };
@@ -320,7 +380,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     if (!mobile || !password) {
       res.status(400).json({
         success: false,
-        message: 'Please provide both mobile number and password.',
+        error: { code: 'MISSING_CREDENTIALS', message: 'Please provide both mobile number and password.' },
       });
       return;
     }
@@ -330,7 +390,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     if (!user) {
       res.status(401).json({
         success: false,
-        message: 'Invalid mobile number or password.',
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid mobile number or password.' },
       });
       return;
     }
@@ -340,7 +400,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     if (!isPasswordMatch) {
       res.status(401).json({
         success: false,
-        message: 'Invalid mobile number or password.',
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid mobile number or password.' },
       });
       return;
     }
@@ -369,11 +429,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       },
     });
   } catch (error: any) {
-    console.error('[Auth Controller] Error in login:', error);
+    console.error('[Auth Controller] Error in login:', error.message);
     res.status(500).json({
       success: false,
-      message: 'Internal server error during login.',
-      error: error?.message,
+      error: { code: 'LOGIN_ERROR', message: 'Internal server error during login.' },
     });
   }
 };
@@ -385,7 +444,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 export const getMe = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     if (!req.user) {
-      res.status(401).json({ success: false, message: 'Not authenticated.' });
+      res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Not authenticated.' }
+      });
       return;
     }
 
@@ -397,14 +459,14 @@ export const getMe = async (req: AuthenticatedRequest, res: Response): Promise<v
         mobile: req.user.mobile,
         role: req.user.role,
         isVerified: req.user.isVerified,
+        onboarding: req.user.onboarding,
         createdAt: req.user.createdAt,
       },
     });
   } catch (error: any) {
     res.status(500).json({
       success: false,
-      message: 'Failed to retrieve user profile.',
-      error: error?.message,
+      error: { code: 'PROFILE_ERROR', message: 'Failed to retrieve user profile.' },
     });
   }
 };
@@ -418,7 +480,7 @@ export const getSmsCredits = async (_req: Request, res: Response): Promise<void>
     const data = await checkRouteCredits(process.env.SMS_ROUTE || '2');
     res.status(200).json({ success: true, data });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message });
+    res.status(500).json({ success: false, error: { code: 'SMS_CREDITS_ERROR', message: err?.message } });
   }
 };
 
@@ -433,30 +495,22 @@ export const getSmsDelivery = async (req: Request, res: Response): Promise<void>
     const data = await getDeliveryReport(messageId);
     res.status(200).json({ success: true, data });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message });
+    res.status(500).json({ success: false, error: { code: 'SMS_DELIVERY_ERROR', message: err?.message } });
   }
 };
 
 /**
  * Save / Update Onboarding Information
+ * Strictly bound to authenticated user. Rejects spoofed client-supplied userIds or mobile numbers.
  * POST /api/auth/onboarding
  */
 export const updateOnboarding = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    let user = req.user;
-
-    // Fallback: lookup by mobile or userId if provided in body
-    if (!user && req.body.mobile) {
-      const mobile = cleanMobileNumber(req.body.mobile);
-      user = (await User.findOne({ mobile })) || undefined;
-    } else if (!user && req.body.userId) {
-      user = (await User.findById(req.body.userId)) || undefined;
-    }
-
+    const user = req.user;
     if (!user) {
       res.status(401).json({
         success: false,
-        message: 'Authentication or valid mobile number is required to save onboarding details.',
+        error: { code: 'UNAUTHORIZED', message: 'Authentication is required to save onboarding details.' },
       });
       return;
     }
@@ -475,10 +529,13 @@ export const updateOnboarding = async (req: AuthenticatedRequest, res: Response)
       industry,
     } = req.body;
 
+    // Sanitize role: only allow self-service roles
+    const safeRole = role && ALLOWED_SELF_ROLES.includes(role) ? role : undefined;
+
     user.onboarding = {
       ...(user.onboarding || {}),
       completed: true,
-      ...(role ? { role } : {}),
+      ...(safeRole ? { role: safeRole } : {}),
       ...(enrollmentId !== undefined ? { enrollmentId } : {}),
       ...(practiceAreas !== undefined ? { practiceAreas } : {}),
       ...(experience !== undefined ? { experience } : {}),
@@ -492,13 +549,11 @@ export const updateOnboarding = async (req: AuthenticatedRequest, res: Response)
       completedAt: new Date(),
     };
 
-    if (role) {
-      user.role = role;
+    if (safeRole) {
+      user.role = safeRole;
     }
 
     await user.save();
-
-    console.log(`[Auth Controller] Onboarding saved for user: ${user.name} (${user.mobile}), Role: ${user.role}`);
 
     res.status(200).json({
       success: true,
@@ -513,17 +568,17 @@ export const updateOnboarding = async (req: AuthenticatedRequest, res: Response)
       },
     });
   } catch (error: any) {
-    console.error('[Auth Controller] Error in updateOnboarding:', error);
+    console.error('[Auth Controller] Error in updateOnboarding:', error.message);
     res.status(500).json({
       success: false,
-      message: 'Failed to save onboarding details.',
-      error: error?.message,
+      error: { code: 'ONBOARDING_ERROR', message: 'Failed to save onboarding details.' },
     });
   }
 };
 
 /**
  * Rotate Refresh Token & Issue New Access Token
+ * Atomically revokes old session and detects replay attacks
  * POST /api/auth/refresh
  */
 export const refreshToken = async (req: Request, res: Response): Promise<void> => {
@@ -538,21 +593,43 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
     }
 
     const tokenHash = hashToken(rawRefreshToken);
-    const session = await RefreshSession.findOne({ tokenHash });
 
-    if (!session || session.isRevoked || session.expiresAt < new Date()) {
+    // Atomic find and revoke: ensures only ONE consumer can succeed
+    const oldSession = await RefreshSession.findOneAndUpdate(
+      { tokenHash, isRevoked: false, expiresAt: { $gt: new Date() } },
+      { isRevoked: true, revokedAt: new Date() },
+      { new: false }
+    );
+
+    if (!oldSession) {
+      // Check if this was a compromised already-revoked token being replayed
+      const revokedSession = await RefreshSession.findOne({ tokenHash });
+      if (revokedSession && revokedSession.isRevoked) {
+        // TOKEN REPLAY ATTACK: Revoke all sessions for this user family
+        await RefreshSession.updateMany(
+          { userId: revokedSession.userId, isRevoked: false },
+          { isRevoked: true, revokedAt: new Date() }
+        );
+
+        res.status(403).json({
+          success: false,
+          error: { code: 'TOKEN_REUSE_DETECTED', message: 'Compromised token re-use detected. All sessions have been terminated for security.' }
+        });
+        return;
+      }
+
       res.status(401).json({
         success: false,
-        error: { code: 'INVALID_SESSION', message: 'Refresh session expired or revoked.' }
+        error: { code: 'INVALID_SESSION', message: 'Refresh session expired, invalid, or already revoked.' }
       });
       return;
     }
 
-    const user = await User.findById(session.userId);
+    const user = await User.findById(oldSession.userId);
     if (!user) {
       res.status(401).json({
         success: false,
-        error: { code: 'USER_NOT_FOUND', message: 'User no longer exists.' }
+        error: { code: 'USER_NOT_FOUND', message: 'User belonging to this session no longer exists.' }
       });
       return;
     }
@@ -566,11 +643,9 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
       req.headers['user-agent'] as string
     );
 
-    // Revoke old session and link to new one
-    session.isRevoked = true;
-    session.revokedAt = new Date();
-    session.replacedByTokenHash = hashToken(newRefreshToken);
-    await session.save();
+    // Link old session to new session hash
+    oldSession.replacedByTokenHash = hashToken(newRefreshToken);
+    await oldSession.save();
 
     res.status(200).json({
       success: true,
@@ -578,7 +653,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
       refreshToken: newRefreshToken
     });
   } catch (error: any) {
-    console.error('[Auth Controller] Error in refreshToken:', error);
+    console.error('[Auth Controller] Error in refreshToken:', error.message);
     res.status(500).json({
       success: false,
       error: { code: 'INTERNAL_ERROR', message: error.message }

@@ -2,9 +2,13 @@ import { Schema, model, Document } from 'mongoose';
 
 export interface IOtp extends Document {
   mobile: string;
-  otp: string;
+  otpHash: string;
   verified: boolean;
+  attempts: number;
+  maxAttempts: number;
+  isLocked: boolean;
   expiresAt: Date;
+  lastRequestedAt: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -17,7 +21,7 @@ const otpSchema = new Schema<IOtp>(
       index: true,
       trim: true,
     },
-    otp: {
+    otpHash: {
       type: String,
       required: true,
     },
@@ -25,10 +29,26 @@ const otpSchema = new Schema<IOtp>(
       type: Boolean,
       default: false,
     },
+    attempts: {
+      type: Number,
+      default: 0,
+    },
+    maxAttempts: {
+      type: Number,
+      default: 5,
+    },
+    isLocked: {
+      type: Boolean,
+      default: false,
+    },
     expiresAt: {
       type: Date,
       required: true,
       index: { expires: 0 }, // MongoDB TTL auto-cleanup after expiration
+    },
+    lastRequestedAt: {
+      type: Date,
+      default: Date.now,
     },
   },
   {
