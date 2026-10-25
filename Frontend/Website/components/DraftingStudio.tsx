@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -345,6 +345,7 @@ export default function DraftingStudio({
   const [draftUltimatum, setDraftUltimatum] = useState(MASTER_TEMPLATES[0].ultimatum);
   const [draftSignOff, setDraftSignOff] = useState(MASTER_TEMPLATES[0].signOffTitle);
   const [isGenerating, setIsGenerating] = useState(false);
+  const canvasScrollRef = useRef<HTMLDivElement>(null);
 
   // New Draft Name Intake Modal State
   const [isNewDraftModalOpen, setIsNewDraftModalOpen] = useState(false);
@@ -820,6 +821,7 @@ export default function DraftingStudio({
       setDraftDate(new Date().toLocaleDateString('en-IN'));
       setIsDraftGenerated(true);
       setSaveStatus('Rent Hike Objection Generated');
+      canvasScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
 
       api.saveDraft({
         id: `draft-${Date.now()}`,
@@ -838,6 +840,56 @@ export default function DraftingStudio({
           id: (Date.now() + 1).toString(),
           sender: 'ai' as const,
           text: 'I have generated a formal Statutory Legal Notice & Objection against the arbitrary price/rent hike from your landlord. The draft invokes statutory protections under the Model Tenancy framework, protects against coercive eviction, and places your formal refusal on record. The document canvas on the left has been updated with the full legal notice.',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages((prev) => [...prev, aiReply]);
+        setActiveMobileView('canvas');
+      }, 400);
+
+    } else if (pLower.includes('power') || pLower.includes('electric') || pLower.includes('blackout') || pLower.includes('disconnection') || pLower.includes('harish hirani')) {
+      // Generate Illegal Power Disconnection Legal Notice
+      const newTitle = 'Legal Notice — Unlawful Disconnection of Electricity Supply';
+      const newHeading = 'FORMAL LEGAL NOTICE & DEMAND FOR IMMEDIATE RESTORATION OF ELECTRICITY';
+      const newTo = 'TO,\nHarish Hirani / Property Owner\n[Demised Premises Owner Address]';
+      const newSubject = 'URGENT STATUTORY NOTICE UNDER SECTION 19 MODEL TENANCY ACT / SECTION 108 TRANSFER OF PROPERTY ACT FOR UNLAWFUL DISCONNECTION OF ELECTRICITY SUPPLY';
+      const newClauses = [
+        '1. LAWFUL TENANCY & PAID ARREARS: That the Claimant is the lawful occupant/tenant in possession of the premises, having faithfully and punctually cleared all monthly rental and electric utility liabilities with zero arrears.',
+        '2. MALICIOUS DISCONNECTION: That you have deliberately, unlawfully, and without any judicial order or statutory sanction disconnected the electrical power supply to the premises, plunging the residence into complete darkness and rendering it uninhabitable.',
+        '3. STATUTORY PROHIBITION AGAINST WITHHOLDING AMENITIES: That under Section 19 of the Model Tenancy Act, 2021, a landlord is strictly prohibited from withholding or severing essential amenities—especially electrical power and water supply—under any circumstances, including pending tenancy disputes.',
+        '4. DELIBERATE ACTIONABLE HARASSMENT: That such high-handed conduct constitutes an actionable civil wrong, trespass, and criminal intimidation under Sections 324 and 351 of Bharatiya Nyaya Sanhita, 2023.'
+      ];
+      const newUltimatum = 'TAKE NOTICE that you are hereby called upon to immediately reconnect and restore full electrical power supply to the demised premises within 24 (Twenty-Four) hours from receipt of this notice, failing which an urgent application for interim mandatory injunction under Section 151 CPC along with criminal prosecution will be initiated at your sole risk and peril.';
+      const newSignOff = 'Yours faithfully,\n[Complainant Name]\nAggrieved Lawful Occupant in Possession';
+
+      setDocTitle(newTitle);
+      setDraftHeading(newHeading);
+      setDraftTo(newTo);
+      setDraftSubject(newSubject);
+      setDraftClauses(newClauses);
+      setDraftUltimatum(newUltimatum);
+      setDraftSignOff(newSignOff);
+      setDraftDate(new Date().toLocaleDateString('en-IN'));
+      setIsDraftGenerated(true);
+      setSaveStatus('Electricity Notice Generated');
+      canvasScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+
+      api.saveDraft({
+        id: `draft-${Date.now()}`,
+        title: newTitle,
+        category: 'Utility Grievance',
+        role: currentRole,
+        heading: newHeading,
+        subject: newSubject,
+        bodyClauses: newClauses,
+        ultimatum: newUltimatum,
+        signOffTitle: newSignOff
+      }).catch(() => {});
+
+      setTimeout(() => {
+        const aiReply = {
+          id: (Date.now() + 1).toString(),
+          sender: 'ai' as const,
+          text: 'I have drafted an urgent Statutory Legal Notice & Demand for immediate restoration of electricity supply against Harish Hirani. The notice invokes statutory protections under Section 19 of the Model Tenancy Act and criminal provisions against unlawful disconnection of essential services. The document canvas on the left has been refreshed with the full pleading and 24-hour restoration ultimatum.',
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setMessages((prev) => [...prev, aiReply]);
@@ -1608,7 +1660,7 @@ export default function DraftingStudio({
                 </div>
 
                 {/* Document Paper Container (Realistic Parchment View - Expanded Width) */}
-                <div className="p-4 sm:p-6 md:p-8 bg-[#F5F2EA] flex-1 overflow-y-auto flex justify-center">
+                <div ref={canvasScrollRef} className="p-4 sm:p-6 md:p-8 bg-[#F5F2EA] flex-1 overflow-y-auto flex justify-center">
                   
                   {/* The White A4 Paper Sheet (Generously Sized max-w-[860px]) */}
                   <div className="w-full max-w-[860px] bg-white rounded-xl shadow-md border border-[#E5E0D5] p-6 sm:p-10 md:p-12 relative text-slate-900 text-sm sm:text-[14.5px] leading-relaxed font-serif min-h-[720px] flex flex-col justify-between select-text">
@@ -1646,7 +1698,7 @@ export default function DraftingStudio({
                         <ol className="list-decimal pl-6 space-y-3 text-justify">
                           {draftClauses.map((clause, idx) => (
                             <li key={idx} className="leading-relaxed">
-                              {clause.split('[CONFIRM:').map((chunk, cIdx) => {
+                              {clause.replace(/^\d+[\.\)]\s*/, '').split('[CONFIRM:').map((chunk, cIdx) => {
                                 if (cIdx === 0) return chunk;
                                 const [placeholder, rest] = chunk.split(']');
                                 return (

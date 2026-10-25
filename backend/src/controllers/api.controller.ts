@@ -313,6 +313,26 @@ function buildSynthesizedLegalDraft(documentType?: string, facts?: any, customIn
     };
   }
 
+  const isPowerDisconnection = instr.includes('power') || instr.includes('electric') || instr.includes('blackout') || instr.includes('disconnection') || instr.includes('utility');
+  if (isPowerDisconnection) {
+    const recipient = facts?.recipient || facts?.landlord || 'The Opposite Party / Harish Hirani';
+    const address = facts?.address || facts?.flat || 'the demised premises';
+    return {
+      title: 'Legal Notice — Unlawful Disconnection of Electricity Supply',
+      heading: 'FORMAL LEGAL NOTICE & DEMAND FOR IMMEDIATE RESTORATION OF ELECTRICITY',
+      toPlaceholder: `${recipient}\nResponsible Entity / Landlord`,
+      subject: 'Urgent Legal Notice under Section 19 Model Tenancy Act / Section 108 Transfer of Property Act for Unlawful and Malicious Disconnection of Electricity Supply',
+      bodyClauses: [
+        `1. That the Claimant is in lawful physical occupation of the premises situated at ${address}, having punctually remitted all monthly dues and power charges without any default.`,
+        `2. That you have unlawfully, arbitrarily, and without color of right disconnected or caused the disruption of electric power supply to the Claimant's premises, causing acute hardship, mental agony, and health hazards.`,
+        `3. That under Section 19 of the Model Tenancy Act, 2021 and settled constitutional precedents, no person or authority has the license to withhold or curtail essential supplies (including water and electricity) under any circumstance.`,
+        `4. That such coercive deprivation constitutes deliberate tortious harassment, actionable trespass, and criminal endangerment under Sections 324 and 351 of Bharatiya Nyaya Sanhita, 2023.`
+      ],
+      ultimatum: 'TAKE NOTICE that you are hereby called upon to restore full and uninterrupted electric power supply to the said premises within 24 (Twenty-Four) hours of receipt of this notice, failing which the Claimant shall approach the Competent Court for an urgent mandatory interim injunction under Section 151 CPC and lodge a criminal complaint at your sole risk and peril.',
+      signOffTitle: 'Yours faithfully,\n[Complainant Name]\nLawful Occupant in Possession'
+    };
+  }
+
   if (isParkOrEnvironment) {
     return {
       title: 'Public Interest Litigation — Protection & Restoration of Public Park',
