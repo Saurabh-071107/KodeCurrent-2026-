@@ -65,3 +65,6 @@ Thumbs.db
 
 # TypeScript build info
 *.tsbuildinfo
+
+# Next.js agent rules
+AGENTS.md
