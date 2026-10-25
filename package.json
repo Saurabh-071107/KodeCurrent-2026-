@@ -1,0 +1,11 @@
+{
+  "name": "kodecurrent-phase2",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix Frontend/Website run dev",
+    "build": "npm --prefix Frontend/Website run build",
+    "start": "npm --prefix Frontend/Website run start",
+    "lint": "npm --prefix Frontend/Website run lint"
+  }
+}
