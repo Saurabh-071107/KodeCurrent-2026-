@@ -359,6 +359,26 @@ export const api = {
     }
   },
 
+  createTranslationJob: async (jobData: {
+    fileName: string;
+    fileSize?: string;
+    sourceLang: string;
+    targetLang: string;
+    clauses?: string[];
+    text?: string;
+  }): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/translation/jobs`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(jobData),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
   // --- Citizen Helpline ---
   askCitizenQuestion: async (question: string): Promise<ApiResponse> => {
     try {

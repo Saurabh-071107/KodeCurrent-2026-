@@ -105,8 +105,8 @@ router.post('/student/courtroom/sessions/:id/turns', authenticateToken, submitCo
 router.post('/student/tests/:id/submit', authenticateToken, submitExam);
 
 // 9. Translation
-router.get('/translation/data', authenticateToken, getTranslationData);
-router.post('/translation/jobs', authenticateToken, createTranslationJob);
+router.get('/translation/data', optionalAuthenticateToken, getTranslationData);
+router.post('/translation/jobs', optionalAuthenticateToken, createTranslationJob);
 
 // 10. Citizen Helpline
 router.post('/citizen/ask', authenticateToken, askCitizenQuestion);
