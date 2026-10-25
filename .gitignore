@@ -62,3 +62,6 @@ Thumbs.db
 
 # Archives
 *.zip
+
+# TypeScript build info
+*.tsbuildinfo
