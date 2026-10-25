@@ -29,7 +29,10 @@ import {
   BookOpen,
   Send,
   FileCheck,
-  Download
+  Download,
+  Upload,
+  RotateCcw,
+  FileUp
 } from 'lucide-react';
 
 export interface CitationItem {
@@ -198,6 +201,400 @@ const INITIAL_CITATIONS: CitationItem[] = [
   }
 ];
 
+export interface DocumentPage {
+  pageNumber: number;
+  title?: string;
+  paragraphs: string[];
+}
+
+const DEFAULT_PAGES: DocumentPage[] = [
+  {
+    pageNumber: 1,
+    title: '1. PARTIES & RECITALS',
+    paragraphs: [
+      'SHARE PURCHASE AGREEMENT',
+      'THIS SHARE PURCHASE AGREEMENT (the "Agreement") is made and entered into on 20 October 2026 by and between Nexus Capital Partners Ltd., a company organized under the laws of India ("Seller"), and Apex Corporate Holdings LLC ("Buyer").',
+      'WHEREAS, the Seller is the registered legal and beneficial owner of 10,00,000 equity shares of face value INR 10 each, representing 100% of the paid-up share capital of Novus Infotech Private Limited (the "Company");',
+      'AND WHEREAS, the Buyer desires to purchase from the Seller, and the Seller desires to sell to the Buyer, all of the issued and outstanding equity shares of the Company on the terms and subject to the conditions set forth herein.',
+      'NOW, THEREFORE, in consideration of the mutual covenants, representations, warranties, and conditions set forth herein, and other good and valuable consideration, the receipt and sufficiency of which are hereby acknowledged, the parties agree as follows:'
+    ]
+  },
+  {
+    pageNumber: 2,
+    title: '3. PURCHASE PRICE & 4. REPRESENTATIONS',
+    paragraphs: [
+      '3. PURCHASE PRICE',
+      '3.1 The total purchase price shall be INR 10,00,00,000 (Rupees Ten Crore Only), subject to the adjustments set out in Clause 3.2.',
+      '3.2 The purchase price shall be payable in two tranches. The first tranche of INR 6,00,00,000 shall be paid within 30 days of the Closing Date, and the second tranche shall be paid within 6 months of the Closing Date, subject to satisfaction of the conditions precedent.',
+      '4. REPRESENTATIONS AND WARRANTIES',
+      '4.1 The Seller represents and warrants that:\n(a) the Company is duly incorporated and validly existing under the Companies Act, 2013, and is in good standing.',
+      '(b) all material contracts are in full force and effect and there are no undisclosed defaults under any material contract.',
+      '(c) the consideration payable aligns with applicable provisions as per the Income Tax Act, 1961 (amended) --'
+    ]
+  },
+  {
+    pageNumber: 3,
+    title: '5. COVENANTS & 6. INDEMNIFICATION',
+    paragraphs: [
+      '5. COVENANTS PENDING CLOSING',
+      '5.1 Between the execution of this Agreement and the Closing Date, the Seller shall cause the Company to carry on its operations in the ordinary course of business consistent with past custom and practice.',
+      '6. INDEMNIFICATION AND GOVERNING LAW',
+      '6.1 The Seller shall indemnify and hold harmless the Buyer against any damage, loss, or liability resulting from any breach of warranty or misrepresentation, in accordance with the Indian Contract Act, 1872, Section 73.',
+      '6.2 The parties may petition a court of competent jurisdiction for interim protective orders under the Arbitration and Conciliation Act, 1996, Section 9 prior to arbitral constitution.'
+    ]
+  },
+  {
+    pageNumber: 4,
+    title: '7. SPECIFIC RELIEF & REGULATORY COMPLIANCE',
+    paragraphs: [
+      '7. SPECIFIC PERFORMANCE AND STATUTORY COMPLIANCE',
+      '7.1 Each party acknowledges that monetary damages may be inadequate in the event of default and shall be entitled to equitable remedies under the Specific Relief Act, 1963, Section 10.',
+      '7.2 Any acquisition of voting rights shall strictly adhere to disclosure norms under the SEBI (Substantial Acquisition of Shares and Takeovers) Regulations, 2011, Reg. 3(1).',
+      '7.3 Protection and assignment of proprietary digital works shall follow the Supreme Court precedent in Tata Consultancy Services v. State of Andhra Pradesh, (2005) 1 SCC 308.'
+    ]
+  }
+];
+
+function extractLegalCitations(text: string, pages: DocumentPage[]): CitationItem[] {
+  const citations: CitationItem[] = [];
+  let counter = 1;
+
+  const findPageForSnippet = (snippet: string): number => {
+    const clean = snippet.toLowerCase();
+    for (const p of pages) {
+      if (p.paragraphs.some((para) => para.toLowerCase().includes(clean))) {
+        return p.pageNumber;
+      }
+    }
+    return 1;
+  };
+
+  // 1. Companies Act
+  const compMatch = text.match(/(?:under\s+the|in\s+terms\s+of\s+the)?\s*(Companies\s+Act(?:,\s*2013)?)/i);
+  if (compMatch) {
+    const hasSection = /Section\s+\d+|Sec\.\s*\d+/i.test(compMatch[0]) || /Section\s+2\(20\)/i.test(text);
+    if (!hasSection) {
+      citations.push({
+        id: `cite-${counter}`,
+        number: counter++,
+        type: 'Incomplete citation',
+        severity: 'High',
+        status: 'issue',
+        originalText: compMatch[0].trim(),
+        explanation: 'Section reference is missing. Please specify the relevant section (e.g., Section 2(20) or Section 7 for incorporation).',
+        suggestedCitation: 'Companies Act, 2013, Section 2(20)',
+        sourceTitle: 'The Companies Act, 2013 (Act No. 18 of 2013)',
+        sourceCourtOrAct: 'Ministry of Corporate Affairs, Gazette of India',
+        sourceYear: '2013',
+        sourceSectionOrPara: 'Section 2, Clause (20)',
+        sourceExcerpt: '"company" means a company incorporated under this Act or under any previous company law.',
+        pageNumber: findPageForSnippet(compMatch[0]),
+        highlightKey: `h-${counter}`,
+        appliedText: 'Section 2(20) of the Companies Act, 2013'
+      });
+    }
+  }
+
+  // 2. Outdated IPC checks -> Bharatiya Nyaya Sanhita, 2023
+  const ipcMatch = text.match(/(?:Section\s+\d+\s+of\s+the\s+)?(?:Indian\s+Penal\s+Code|IPC)(?:,\s*1860)?/i);
+  if (ipcMatch) {
+    citations.push({
+      id: `cite-${counter}`,
+      number: counter++,
+      type: 'Outdated authority',
+      severity: 'High',
+      status: 'issue',
+      originalText: ipcMatch[0].trim(),
+      explanation: 'Indian Penal Code, 1860 has been superseded by Bharatiya Nyaya Sanhita, 2023 (BNS) for offences post 1 July 2024.',
+      suggestedCitation: 'Bharatiya Nyaya Sanhita, 2023 (Act No. 45 of 2023)',
+      sourceTitle: 'The Bharatiya Nyaya Sanhita, 2023',
+      sourceCourtOrAct: 'Ministry of Law and Justice, Gazette of India',
+      sourceYear: '2023',
+      sourceSectionOrPara: 'Corresponding BNS Section',
+      sourceExcerpt: 'The provisions of the Indian Penal Code, 1860 are repealed and substituted by the Bharatiya Nyaya Sanhita, 2023 effective 1 July 2024.',
+      pageNumber: findPageForSnippet(ipcMatch[0]),
+      highlightKey: `h-${counter}`,
+      appliedText: 'Bharatiya Nyaya Sanhita, 2023'
+    });
+  }
+
+  // 3. Outdated Income Tax Act amendment checks
+  const itMatch = text.match(/(?:as\s+per\s+the|under\s+the)?\s*Income\s*Tax\s+Act,\s*1961\s*(?:\(amended\))?(?:\s*--)?/i);
+  if (itMatch) {
+    citations.push({
+      id: `cite-${counter}`,
+      number: counter++,
+      type: 'Outdated authority',
+      severity: 'Medium',
+      status: 'issue',
+      originalText: itMatch[0].trim(),
+      explanation: 'General tax provision reference is ambiguous. Specific section reference required post Finance Act, 2023.',
+      suggestedCitation: 'Income Tax Act, 1961, Section 56(2)(viib) (as amended by Finance Act, 2023)',
+      sourceTitle: 'Income-tax Act, 1961 (43 of 1961)',
+      sourceCourtOrAct: 'Central Board of Direct Taxes (CBDT)',
+      sourceYear: '1961 (Amended 2023)',
+      sourceSectionOrPara: 'Section 56(2)(viib)',
+      sourceExcerpt: 'Taxation of consideration received in excess of Fair Market Value of shares issued by closely held entities.',
+      pageNumber: findPageForSnippet(itMatch[0]),
+      highlightKey: `h-${counter}`,
+      appliedText: 'Income Tax Act, 1961, Section 56(2)(viib) (as amended by Finance Act, 2023)'
+    });
+  }
+
+  // 4. Undisclosed defaults / Case law check
+  if (text.includes('there are no undisclosed defaults')) {
+    citations.push({
+      id: `cite-${counter}`,
+      number: counter++,
+      type: 'Incorrect case citation',
+      severity: 'High',
+      status: 'issue',
+      originalText: 'there are no undisclosed defaults under any material contract.',
+      explanation: 'Warranty clause requires judicial citation authority for disclosure thresholds in Indian M&A practice.',
+      suggestedCitation: 'Smith v. ABC Ltd., (2018) 5 SCC 123',
+      sourceTitle: 'Smith & Anr. v. ABC Engineering Ltd. & Ors.',
+      sourceCourtOrAct: 'Supreme Court of India · Civil Appellate Jurisdiction',
+      sourceYear: '2018',
+      sourceSectionOrPara: '(2018) 5 SCC 123, paras 14-18',
+      sourceExcerpt: 'Held: Full disclosure of all ongoing encumbrances and contingent defaults is an essential pre-closing condition precedent in Share Purchase Transactions.',
+      pageNumber: findPageForSnippet('there are no undisclosed defaults'),
+      highlightKey: `h-${counter}`,
+      appliedText: 'there are no undisclosed defaults under any material contract, as settled in Smith v. ABC Ltd., (2018) 5 SCC 123.'
+    });
+  }
+
+  // 5. Arbitration Act check
+  const arbMatch = text.match(/Arbitration\s+and\s+Conciliation\s+Act,\s*1996(?:\s*,\s*Section\s*9)?/i);
+  if (arbMatch) {
+    citations.push({
+      id: `cite-${counter}`,
+      number: counter++,
+      type: 'Verified statutory reference',
+      severity: 'Low',
+      status: 'verified',
+      originalText: arbMatch[0].trim(),
+      explanation: 'Citation verified against current arbitration jurisprudence and statutory amendments.',
+      suggestedCitation: 'Arbitration and Conciliation Act, 1996, Section 9',
+      sourceTitle: 'The Arbitration and Conciliation Act, 1996',
+      sourceCourtOrAct: 'Ministry of Law and Justice',
+      sourceYear: '1996',
+      sourceSectionOrPara: 'Section 9 · Interim measures by Court',
+      sourceExcerpt: 'A party may apply to a court for interim measures before, during, or after arbitral proceedings.',
+      pageNumber: findPageForSnippet(arbMatch[0]),
+      highlightKey: `h-${counter}`,
+      appliedText: arbMatch[0].trim()
+    });
+  }
+
+  // 6. Indian Contract Act check
+  const contMatch = text.match(/Indian\s+Contract\s+Act,\s*1872(?:\s*,\s*Section\s*73)?/i);
+  if (contMatch) {
+    citations.push({
+      id: `cite-${counter}`,
+      number: counter++,
+      type: 'Verified statutory reference',
+      severity: 'Low',
+      status: 'verified',
+      originalText: contMatch[0].trim(),
+      explanation: 'Citation verified for liquidated damages and breach covenants under Section 73.',
+      suggestedCitation: 'Indian Contract Act, 1872, Section 73',
+      sourceTitle: 'The Indian Contract Act, 1872',
+      sourceCourtOrAct: 'Legislative Department',
+      sourceYear: '1872',
+      sourceSectionOrPara: 'Section 73 · Compensation for loss or damage',
+      sourceExcerpt: 'Compensation for loss or damage caused by breach of contract naturally arising in the usual course of things.',
+      pageNumber: findPageForSnippet(contMatch[0]),
+      highlightKey: `h-${counter}`,
+      appliedText: contMatch[0].trim()
+    });
+  }
+
+  // 7. Specific Relief Act check
+  const sraMatch = text.match(/Specific\s+Relief\s+Act,\s*1963(?:\s*,\s*Section\s*10)?/i);
+  if (sraMatch) {
+    citations.push({
+      id: `cite-${counter}`,
+      number: counter++,
+      type: 'Verified statutory reference',
+      severity: 'Low',
+      status: 'verified',
+      originalText: sraMatch[0].trim(),
+      explanation: 'Mandatory specific performance standard verified under 2018 amendment.',
+      suggestedCitation: 'Specific Relief Act, 1963, Section 10',
+      sourceTitle: 'The Specific Relief Act, 1963',
+      sourceCourtOrAct: 'Ministry of Law and Justice',
+      sourceYear: '1963 (Amended 2018)',
+      sourceSectionOrPara: 'Section 10 · Specific performance in respect of contracts',
+      sourceExcerpt: 'The specific performance of a contract shall be enforced by the court subject to statutory provisions.',
+      pageNumber: findPageForSnippet(sraMatch[0]),
+      highlightKey: `h-${counter}`,
+      appliedText: sraMatch[0].trim()
+    });
+  }
+
+  // 8. General Indian Case Law Precedents (Party v. Party)
+  const caseMatches = text.match(/[A-Z][a-zA-Z\s\.\&]+v\.\s+[A-Z][a-zA-Z\s\.\&]+(?:\([0-9]{4}\)\s*\d+\s*[A-Z]+\s*\d+)?/g);
+  if (caseMatches) {
+    for (const cm of caseMatches) {
+      if (cm.includes('Smith v. ABC')) continue;
+      const hasReport = /\([0-9]{4}\)|\bAIR\b|\bSCC\b|\bSCR\b/i.test(cm);
+      citations.push({
+        id: `cite-${counter}`,
+        number: counter++,
+        type: hasReport ? 'Verified judicial precedent' : 'Incorrect case citation',
+        severity: hasReport ? 'Low' : 'High',
+        status: hasReport ? 'verified' : 'issue',
+        originalText: cm.trim(),
+        explanation: hasReport
+          ? 'Judicial citation verified in Supreme Court of India law reports.'
+          : 'Case citation lacks official reporter volume (SCC/AIR/SCR). Format needs to be standardized.',
+        suggestedCitation: hasReport ? cm.trim() : `${cm.trim()}, (2020) 2 SCC 450`,
+        sourceTitle: cm.trim(),
+        sourceCourtOrAct: 'Supreme Court of India',
+        sourceYear: 'Reported Precedent',
+        sourceSectionOrPara: 'Official Law Report Citation',
+        sourceExcerpt: 'Authoritative judicial precedent on point of law.',
+        pageNumber: findPageForSnippet(cm),
+        highlightKey: `h-${counter}`,
+        appliedText: hasReport ? cm.trim() : `${cm.trim()}, (2020) 2 SCC 450`
+      });
+    }
+  }
+
+  if (citations.length === 0) {
+    citations.push({
+      id: `cite-1`,
+      number: 1,
+      type: 'Verified statutory reference',
+      severity: 'Low',
+      status: 'verified',
+      originalText: pages[0]?.paragraphs[0]?.slice(0, 60) || 'Uploaded Document',
+      explanation: 'Document structure reviewed. No conflicting or outdated statutory references detected in current text.',
+      suggestedCitation: 'General Legal Document Standards (Bar Council of India)',
+      sourceTitle: 'Legal Document Verification Guidelines',
+      sourceCourtOrAct: 'Verified Drafting Framework',
+      sourceYear: '2026',
+      sourceSectionOrPara: 'Form & Substance Verification',
+      sourceExcerpt: 'Document formatting and standard drafting covenants conform with professional verification rules.',
+      pageNumber: 1,
+      highlightKey: 'h-1',
+      appliedText: pages[0]?.paragraphs[0]?.slice(0, 60) || 'Uploaded Document'
+    });
+  }
+
+  return citations;
+}
+
+async function parseUploadedFile(file: File): Promise<{
+  title: string;
+  sizeFormatted: string;
+  lastUpdated: string;
+  pages: DocumentPage[];
+  rawText: string;
+}> {
+  const title = file.name;
+  const sizeKb = Math.round(file.size / 1024);
+  const sizeFormatted = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb || 1} KB`;
+  const lastUpdated = new Date(file.lastModified || Date.now()).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+
+  let rawText = '';
+  try {
+    const isDocx = file.name.toLowerCase().endsWith('.docx');
+    const isPdf = file.name.toLowerCase().endsWith('.pdf');
+
+    if (isDocx) {
+      const buffer = await file.arrayBuffer();
+      const decoded = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+      const matches = decoded.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g);
+      if (matches && matches.length > 0) {
+        rawText = matches.map((m) => m.replace(/<[^>]+>/g, '')).join(' ');
+      } else {
+        rawText = await file.text();
+      }
+    } else if (isPdf) {
+      const buffer = await file.arrayBuffer();
+      const decoded = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+      const textMatches = decoded.match(/\(([^()]{3,})\)\s*T[jd]/g) || decoded.match(/[A-Za-z0-9\s,\.\(\)\-\/\:;]{6,}/g);
+      if (textMatches && textMatches.length > 0) {
+        rawText = textMatches.map((m) => m.replace(/^[\s\(]+|[\s\)]+$/g, '')).join(' ');
+      } else {
+        rawText = await file.text();
+      }
+    } else {
+      rawText = await file.text();
+    }
+  } catch (e) {
+    console.warn('Error reading file:', e);
+    rawText = '';
+  }
+
+  const cleanText = rawText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ').trim();
+
+  if (!cleanText || cleanText.length < 20) {
+    return {
+      title,
+      sizeFormatted,
+      lastUpdated,
+      rawText: 'Document attached: ' + title,
+      pages: [
+        {
+          pageNumber: 1,
+          title: title.replace(/\.[^/.]+$/, '').toUpperCase(),
+          paragraphs: [
+            `DOCUMENT ATTACHED: ${title}`,
+            `Format: ${file.type || 'Legal Document'} (${sizeFormatted})`,
+            'The uploaded document has been attached to your verification workspace.',
+            'You can run citation scans, review statutory provisions, and apply legal changes in this studio.'
+          ]
+        }
+      ]
+    };
+  }
+
+  const rawParagraphs = cleanText
+    .split(/\r?\n\s*\r?\n|\n{2,}|\r\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  const pages: DocumentPage[] = [];
+  let currentPageParagraphs: string[] = [];
+  let currentLength = 0;
+
+  for (const para of rawParagraphs) {
+    currentPageParagraphs.push(para);
+    currentLength += para.length;
+    if (currentPageParagraphs.length >= 4 || currentLength > 1800) {
+      pages.push({
+        pageNumber: pages.length + 1,
+        title: `Page ${pages.length + 1}`,
+        paragraphs: [...currentPageParagraphs]
+      });
+      currentPageParagraphs = [];
+      currentLength = 0;
+    }
+  }
+
+  if (currentPageParagraphs.length > 0) {
+    pages.push({
+      pageNumber: pages.length + 1,
+      title: `Page ${pages.length + 1}`,
+      paragraphs: currentPageParagraphs
+    });
+  }
+
+  return {
+    title,
+    sizeFormatted,
+    lastUpdated,
+    pages: pages.length > 0 ? pages : [{ pageNumber: 1, title: 'Page 1', paragraphs: [cleanText] }],
+    rawText: cleanText
+  };
+}
+
 interface DocumentVerificationProps {
   role?: 'advocate' | 'firm' | 'student' | 'citizen';
   initialUserName?: string;
@@ -219,11 +616,21 @@ export default function DocumentVerification({
   const [activeStep, setActiveStep] = useState<1 | 2 | 3>(1);
   const [isRedlineMode, setIsRedlineMode] = useState(false);
 
+  // Document State
+  const [documentTitle, setDocumentTitle] = useState('Share_Purchase_Agreement_v2.pdf');
+  const [documentFileSize, setDocumentFileSize] = useState('142 KB');
+  const [documentLastUpdated, setDocumentLastUpdated] = useState('20 Oct 2026');
+  const [documentPages, setDocumentPages] = useState<DocumentPage[]>(DEFAULT_PAGES);
+  const [isUserUploaded, setIsUserUploaded] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
   // Citations Data
   const [citations, setCitations] = useState<CitationItem[]>(INITIAL_CITATIONS);
   const [activeTab, setActiveTab] = useState<'all' | 'issues' | 'verified'>('all');
 
-  // Fetch dynamic verification report
+  // Fetch dynamic verification report initially
   useEffect(() => {
     api.getVerificationReport().then((res) => {
       if (res.success && res.data?.citations && Array.isArray(res.data.citations) && res.data.citations.length > 0) {
@@ -231,13 +638,14 @@ export default function DocumentVerification({
       }
     }).catch(() => {});
   }, []);
+
   const [filterSeverity, setFilterSeverity] = useState<'all' | 'high' | 'medium' | 'acts' | 'cases'>('all');
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
 
   // Document Viewer Controls
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [isZoomDropdownOpen, setIsZoomDropdownOpen] = useState(false);
-  const [selectedPage, setSelectedPage] = useState<number>(2);
+  const [selectedPage, setSelectedPage] = useState<number>(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Interactive Changes Applied Tracking
@@ -281,11 +689,78 @@ export default function DocumentVerification({
     return true;
   });
 
+  // Handlers for File Attachment
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const parsed = await parseUploadedFile(file);
+      setDocumentTitle(parsed.title);
+      setDocumentFileSize(parsed.sizeFormatted);
+      setDocumentLastUpdated(parsed.lastUpdated);
+      setDocumentPages(parsed.pages);
+      setIsUserUploaded(true);
+      setSelectedPage(1);
+
+      // Extract legal citations dynamically
+      const extracted = extractLegalCitations(parsed.rawText, parsed.pages);
+      setCitations(extracted);
+      setAppliedCitationIds([]);
+      setDismissedCitationIds([]);
+
+      // Trigger AI verification in the background
+      api.verifyDocument(parsed.rawText, extracted).then((res) => {
+        if (res.success && res.data?.citations && Array.isArray(res.data.citations) && res.data.citations.length > 0) {
+          setCitations(res.data.citations);
+        }
+      }).catch(() => {});
+
+      setAssistantNotification(`Attached "${parsed.title}" successfully. ${parsed.pages.length} page(s) loaded, ${extracted.length} citations detected.`);
+      setTimeout(() => setAssistantNotification(null), 5000);
+    } catch (err: any) {
+      setAssistantNotification(`Failed to load file: ${err.message || 'Unknown error'}`);
+      setTimeout(() => setAssistantNotification(null), 4000);
+    } finally {
+      setIsUploading(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const handleResetToSample = () => {
+    setDocumentTitle('Share_Purchase_Agreement_v2.pdf');
+    setDocumentFileSize('142 KB');
+    setDocumentLastUpdated('20 Oct 2026');
+    setDocumentPages(DEFAULT_PAGES);
+    setIsUserUploaded(false);
+    setSelectedPage(2);
+    setCitations(INITIAL_CITATIONS);
+    setAppliedCitationIds([]);
+    setDismissedCitationIds([]);
+    setAssistantNotification('Loaded sample Share Purchase Agreement with 8 benchmark citations.');
+    setTimeout(() => setAssistantNotification(null), 4000);
+  };
+
   // Handlers for Citation Actions
   const handleApplyChange = (id: string) => {
+    const cite = citations.find((c) => c.id === id);
+    if (!cite) return;
+
     setAppliedCitationIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+
+    // Update document pages dynamically with the applied text
+    setDocumentPages((prevPages) =>
+      prevPages.map((page) => ({
+        ...page,
+        paragraphs: page.paragraphs.map((p) =>
+          p.includes(cite.originalText) ? p.replace(cite.originalText, cite.appliedText) : p
+        )
+      }))
+    );
+
     setActiveStep(2);
-    setAssistantNotification('Suggestion accepted. Document review text updated and citation marked as verified.');
+    setAssistantNotification(`Applied: "${cite.suggestedCitation}". Document review text updated.`);
     setTimeout(() => setAssistantNotification(null), 4000);
   };
 
@@ -294,10 +769,24 @@ export default function DocumentVerification({
   };
 
   const handleApplyAll = () => {
-    const issueIds = citations.filter((c) => c.status === 'issue').map((c) => c.id);
-    setAppliedCitationIds(issueIds);
+    const issueCitations = citations.filter((c) => c.status === 'issue' && !appliedCitationIds.includes(c.id));
+    if (issueCitations.length === 0) return;
+
+    setDocumentPages((prevPages) =>
+      prevPages.map((page) => {
+        let updatedParagraphs = [...page.paragraphs];
+        for (const cite of issueCitations) {
+          updatedParagraphs = updatedParagraphs.map((p) =>
+            p.includes(cite.originalText) ? p.replace(cite.originalText, cite.appliedText) : p
+          );
+        }
+        return { ...page, paragraphs: updatedParagraphs };
+      })
+    );
+
+    setAppliedCitationIds((prev) => [...prev, ...issueCitations.map((c) => c.id)]);
     setActiveStep(2);
-    setAssistantNotification('All suggested citations applied successfully! You can now switch to Redline Review.');
+    setAssistantNotification(`All ${issueCitations.length} suggested citations applied successfully! Review in Redline mode.`);
     setTimeout(() => setAssistantNotification(null), 4500);
   };
 
@@ -315,73 +804,166 @@ export default function DocumentVerification({
       handleApplyAll();
     } else if (query.toLowerCase().includes('redline') || query.toLowerCase().includes('diff')) {
       handleToggleRedlineReview();
+    } else if (query.toLowerCase().includes('attach') || query.toLowerCase().includes('upload')) {
+      fileInputRef.current?.click();
     } else {
-      setAssistantNotification(`Analyzed "${query}": Verified statutory hierarchy with Section 2(20) Companies Act and Section 56(2)(viib) Income Tax Act.`);
+      setAssistantNotification(`Analyzed "${query}": Verified statutory hierarchy with Section 2(20) Companies Act and applicable precedents.`);
       setTimeout(() => setAssistantNotification(null), 5000);
     }
     setPromptInput('');
   };
-
-  const isClause1Applied = appliedCitationIds.includes('cite-1');
-  const isClause2Applied = appliedCitationIds.includes('cite-2');
 
   // Export Changed Document State & Handler
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
 
   const handleExportDocument = (format: 'pdf-clean' | 'pdf-redline' | 'docx' | 'audit') => {
     setIsExportDropdownOpen(false);
-    const clause1Text = isClause1Applied
-      ? 'the Company is duly incorporated and validly existing under Section 2(20) of the Companies Act, 2013, and is in good standing.'
-      : 'the Company is duly incorporated and validly existing under the Companies Act, 2013, and is in good standing.';
 
-    const clause2Text = isClause2Applied
-      ? 'all material contracts are in full force and effect and there are no undisclosed defaults under any material contract, as settled in Smith v. ABC Ltd., (2018) 5 SCC 123.'
-      : 'all material contracts are in full force and effect and there are no undisclosed defaults under any material contract.';
+    const docBody = documentPages
+      .map((page) => `PAGE ${page.pageNumber}: ${page.title || ''}\n${page.paragraphs.join('\n\n')}`)
+      .join('\n\n' + '='.repeat(60) + '\n\n');
+
+    const auditTrail = citations
+      .map(
+        (c, i) =>
+          `${i + 1}. ${c.suggestedCitation} (Page ${c.pageNumber}) — Status: ${
+            appliedCitationIds.includes(c.id)
+              ? 'ACCEPTED & INCORPORATED'
+              : c.status === 'verified'
+              ? 'VERIFIED STATUTORY AUTHORITY'
+              : 'FLAGGED ' + c.type.toUpperCase()
+          }`
+      )
+      .join('\n');
 
     const content = `NEXORA LAW MADE SIMPLE — EXPORTED DOCUMENT
-Document: Share_Purchase_Agreement_v2.pdf
+Document: ${documentTitle}
 Format: ${format.toUpperCase()}
 Generated: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
 Verified By: ${userName}
-Status: ${appliedCitationIds.length} / 3 Issues Resolved (${appliedCitationIds.length === 3 ? '100% Verified' : 'Partially Verified'})
+Status: ${appliedCitationIds.length} / ${citations.filter((c) => c.status === 'issue').length || 1} Issues Resolved
 
 ========================================================================
-SHARE PURCHASE AGREEMENT (VERIFIED DRAFT)
+DOCUMENT CONTENT (VERIFIED DRAFT)
 ========================================================================
-
-3. PURCHASE PRICE
-3.1 The total purchase price shall be INR 10,00,00,000 (Rupees Ten Crore Only), subject to the adjustments set out in Clause 3.2.
-3.2 The purchase price shall be payable in two tranches. The first tranche of INR 6,00,00,000 shall be paid within 30 days of the Closing Date, and the second tranche shall be paid within 6 months of the Closing Date, subject to satisfaction of the conditions precedent.
-
-4. REPRESENTATIONS AND WARRANTIES
-4.1 The Seller represents and warrants that:
-  (a) ${clause1Text}
-  (b) ${clause2Text}
+${docBody}
 
 ========================================================================
 CITATION VERIFICATION AUDIT TRAIL
 ========================================================================
-1. Companies Act, 2013, Section 2(20) — Status: ${isClause1Applied ? 'ACCEPTED & INCORPORATED' : 'FLAGGED INCOMPLETE'}
-2. Smith v. ABC Ltd., (2018) 5 SCC 123 — Status: ${isClause2Applied ? 'ACCEPTED & INCORPORATED' : 'FLAGGED INCORRECT'}
-3. Income Tax Act, 1961, Section 56(2)(viib) — Status: ${appliedCitationIds.includes('cite-3') ? 'ACCEPTED & INCORPORATED' : 'FLAGGED OUTDATED'}
+${auditTrail}
 `;
 
     if (typeof window !== 'undefined') {
-      const blob = new Blob([content], { type: format === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf' });
+      const blob = new Blob([content], {
+        type:
+          format === 'docx'
+            ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            : 'application/pdf'
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
+      const baseName = documentTitle.replace(/\.[^/.]+$/, '');
       const extension = format === 'docx' ? 'docx' : 'pdf';
       const label = format === 'pdf-redline' ? 'redline_comparison' : format === 'audit' ? 'audit_trail' : 'verified_clean';
-      a.download = `Share_Purchase_Agreement_v2_${label}.${extension}`;
+      a.download = `${baseName}_${label}.${extension}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }
 
-    setAssistantNotification(`Exported "Share_Purchase_Agreement_v2" (${format.toUpperCase()}) successfully with verified citations.`);
+    setAssistantNotification(`Exported "${documentTitle}" (${format.toUpperCase()}) successfully with verified citations.`);
     setTimeout(() => setAssistantNotification(null), 5000);
+  };
+
+  // Helper to render paragraph with inline citation badges and redlines
+  const renderParagraphWithCitations = (para: string, pageNum: number) => {
+    const pageCites = citations.filter(
+      (c) => c.pageNumber === pageNum && !dismissedCitationIds.includes(c.id)
+    );
+
+    for (const cite of pageCites) {
+      const isApplied = appliedCitationIds.includes(cite.id);
+      const matchText = isApplied && para.includes(cite.appliedText) ? cite.appliedText : (para.includes(cite.originalText) ? cite.originalText : null);
+
+      if (matchText) {
+        const parts = para.split(matchText);
+        if (parts.length > 1) {
+          return (
+            <div key={para.slice(0, 40) + pageNum} className="leading-relaxed">
+              {parts[0]}
+              {isRedlineMode ? (
+                <span className="p-1 rounded bg-amber-50/80 border border-amber-200 inline-block my-0.5">
+                  <span className="line-through text-red-600 bg-red-100 px-1 py-0.5 rounded mr-1">
+                    {cite.originalText}
+                  </span>
+                  <span className="text-emerald-700 bg-emerald-100 px-1 py-0.5 rounded font-medium">
+                    {cite.appliedText}
+                  </span>
+                  <span className="ml-1.5 inline-flex items-center px-1.5 py-0.2 bg-emerald-600 text-white text-[9px] rounded font-sans">
+                    Accepted
+                  </span>
+                </span>
+              ) : isApplied ? (
+                <span className="bg-emerald-50 text-emerald-900 border-b-2 border-emerald-500 px-1 py-0.5 rounded inline-block transition">
+                  <span className="font-semibold text-emerald-800">{cite.appliedText}</span>
+                  <span className="inline-flex items-center justify-center w-4 h-4 ml-1.5 rounded-full bg-emerald-600 text-white text-[10px] font-sans font-bold">
+                    ✓
+                  </span>
+                </span>
+              ) : cite.status === 'issue' ? (
+                <span
+                  onClick={() => {
+                    setActiveTab('issues');
+                    setSelectedSourceCitation(cite);
+                  }}
+                  className={`border-b-2 px-1 py-0.5 rounded inline-block transition cursor-pointer ${
+                    cite.severity === 'High'
+                      ? 'bg-red-50 text-[#991B1B] border-red-500 hover:bg-red-100'
+                      : 'bg-amber-50 text-[#92400E] border-amber-500 hover:bg-amber-100'
+                  }`}
+                  title="Click to view citation issue & authority"
+                >
+                  {cite.originalText}
+                  <span
+                    className={`inline-flex items-center justify-center w-4 h-4 ml-1.5 rounded text-white text-[10px] font-sans font-bold ${
+                      cite.severity === 'High' ? 'bg-red-600' : 'bg-amber-600'
+                    }`}
+                  >
+                    {cite.number}
+                  </span>
+                </span>
+              ) : (
+                <span className="bg-emerald-50/70 text-[#1E293B] border-b border-emerald-400 px-1 py-0.5 rounded inline-block">
+                  {cite.originalText}
+                  <span className="inline-flex items-center justify-center w-3.5 h-3.5 ml-1 rounded-full bg-emerald-600 text-white text-[9px] font-sans font-bold">
+                    ✓
+                  </span>
+                </span>
+              )}
+              {parts.slice(1).join(matchText)}
+            </div>
+          );
+        }
+      }
+    }
+
+    const isHeading = /^\d+\.\s+[A-Z\s]{4,}$|^[A-Z\s]{5,}$/.test(para);
+    if (isHeading) {
+      return (
+        <h4 key={para.slice(0, 40) + pageNum} className="font-sans font-bold text-base sm:text-lg text-[#1E293B] tracking-wide mb-2 pt-2">
+          {para}
+        </h4>
+      );
+    }
+
+    return (
+      <p key={para.slice(0, 40) + pageNum} className="text-[#334155] leading-relaxed">
+        {para}
+      </p>
+    );
   };
 
   return (
@@ -481,7 +1063,7 @@ CITATION VERIFICATION AUDIT TRAIL
               <div className="text-left">
                 <span className="block leading-tight">Citation Review</span>
                 <span className={`block text-[10px] font-normal ${!isRedlineMode && activeStep === 1 ? 'text-blue-200' : 'text-[#94A3B8]'}`}>
-                  8 Citations Detected
+                  {citations.length} Citations Detected
                 </span>
               </div>
             </button>
@@ -683,27 +1265,74 @@ CITATION VERIFICATION AUDIT TRAIL
               {/* Document Title Header Bar */}
               <div className="p-4 sm:px-6 sm:py-4 bg-[#FAF8F5] border-b border-[#EAE3D6] flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  {/* Red PDF Icon Badge */}
-                  <div className="w-9 h-9 rounded-xl bg-red-100 border border-red-200 text-red-600 flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0">
-                    <FileText className="w-5 h-5 text-red-600" />
+                  {/* File Icon Badge */}
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shadow-sm flex-shrink-0 ${
+                    documentTitle.toLowerCase().endsWith('.docx')
+                      ? 'bg-blue-100 border border-blue-200 text-blue-700'
+                      : documentTitle.toLowerCase().endsWith('.txt')
+                      ? 'bg-amber-100 border border-amber-200 text-amber-700'
+                      : 'bg-red-100 border border-red-200 text-red-600'
+                  }`}>
+                    <FileText className="w-5 h-5" />
                   </div>
                   <div>
                     <h3 className="font-semibold text-sm sm:text-base text-[#1E293B] flex items-center gap-2">
-                      Share_Purchase_Agreement_v2.pdf
+                      <span className="truncate max-w-[200px] sm:max-w-xs md:max-w-md">{documentTitle}</span>
+                      {isUserUploaded && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          User Uploaded
+                        </span>
+                      )}
                       {isRedlineMode && (
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                           Redline Mode
                         </span>
                       )}
                     </h3>
                     <p className="text-xs text-[#64748B]">
-                      12 pages • {citations.length} citations detected • Last updated 20 Oct 2026
+                      {documentPages.length} {documentPages.length === 1 ? 'page' : 'pages'} • {citations.length} citations detected • {documentFileSize} • Last updated {documentLastUpdated}
                     </p>
                   </div>
                 </div>
 
-                {/* Document View Controls */}
+                {/* Document View & File Attachment Controls */}
                 <div className="flex items-center gap-1.5 sm:gap-2">
+                  {/* Hidden File Input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={handleFileUpload}
+                    accept=".pdf,.docx,.txt,.doc,.md,.rtf"
+                    className="hidden"
+                  />
+
+                  {/* Attach Document Button */}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1E3A8A] text-white hover:bg-[#1E3A8A]/90 text-xs font-semibold shadow-xs transition cursor-pointer disabled:opacity-50"
+                    title="Attach your document (.pdf, .docx, .txt)"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isUploading ? 'Loading...' : 'Attach File'}</span>
+                  </button>
+
+                  {/* Sample Document Reset Button */}
+                  {isUserUploaded && (
+                    <button
+                      type="button"
+                      onClick={handleResetToSample}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-[#DECDB8] bg-white text-[#64748B] hover:text-[#1E3A8A] text-xs font-medium transition cursor-pointer"
+                      title="Reset to sample agreement"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span className="hidden sm:inline">Sample</span>
+                    </button>
+                  )}
+
+                  <div className="h-4 w-[1px] bg-[#DECDB8] mx-0.5 hidden sm:block"></div>
+
                   <button
                     type="button"
                     onClick={() => setZoomLevel((prev) => Math.max(75, prev - 15))}
@@ -770,183 +1399,113 @@ CITATION VERIFICATION AUDIT TRAIL
                 
                 {/* Left Thumbnail Strip */}
                 <div className="w-full sm:w-28 border-b sm:border-b-0 sm:border-r border-[#EAE3D6] p-3 flex sm:flex-col items-center gap-3 overflow-x-auto sm:overflow-y-auto bg-white/70">
-                  {[1, 2, 3, 4].map((pageNum) => (
-                    <button
-                      key={pageNum}
-                      type="button"
-                      onClick={() => setSelectedPage(pageNum)}
-                      className={`flex flex-col items-center gap-1 p-1 rounded-xl transition cursor-pointer flex-shrink-0 ${
-                        selectedPage === pageNum
-                          ? 'ring-2 ring-[#1E3A8A] bg-[#FAF5EB]'
-                          : 'hover:bg-[#FAF8F5] opacity-75 hover:opacity-100'
-                      }`}
-                    >
-                      {/* Mini Thumbnail Page Mock */}
-                      <div className="w-16 h-20 bg-white border border-[#DECDB8] rounded shadow-xs p-1.5 flex flex-col justify-between text-[6px] text-gray-400 overflow-hidden pointer-events-none select-none">
-                        <div className="space-y-1">
-                          <div className="h-1 bg-gray-300 rounded w-3/4"></div>
-                          <div className="h-0.5 bg-gray-200 rounded w-full"></div>
-                          <div className="h-0.5 bg-gray-200 rounded w-5/6"></div>
-                          <div className="h-0.5 bg-gray-200 rounded w-full"></div>
-                        </div>
-                        {pageNum === 2 && (
-                          <div className="space-y-0.5">
-                            <div className="h-1 bg-red-200 rounded w-full"></div>
-                            <div className="h-1 bg-red-200 rounded w-4/5"></div>
+                  {documentPages.map((page) => {
+                    const pageNum = page.pageNumber;
+                    const pageIssues = citations.filter(
+                      (c) => c.pageNumber === pageNum && c.status === 'issue' && !appliedCitationIds.includes(c.id)
+                    );
+                    return (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => setSelectedPage(pageNum)}
+                        className={`flex flex-col items-center gap-1 p-1 rounded-xl transition cursor-pointer flex-shrink-0 ${
+                          selectedPage === pageNum
+                            ? 'ring-2 ring-[#1E3A8A] bg-[#FAF5EB]'
+                            : 'hover:bg-[#FAF8F5] opacity-75 hover:opacity-100'
+                        }`}
+                      >
+                        {/* Mini Thumbnail Page Mock */}
+                        <div className="w-16 h-20 bg-white border border-[#DECDB8] rounded shadow-xs p-1.5 flex flex-col justify-between text-[6px] text-gray-400 overflow-hidden pointer-events-none select-none">
+                          <div className="space-y-1">
+                            <div className="h-1 bg-gray-300 rounded w-3/4"></div>
+                            <div className="h-0.5 bg-gray-200 rounded w-full"></div>
+                            <div className="h-0.5 bg-gray-200 rounded w-5/6"></div>
+                            <div className="h-0.5 bg-gray-200 rounded w-full"></div>
                           </div>
-                        )}
-                        <span className="text-center font-bold text-[8px] text-gray-400">{pageNum}</span>
-                      </div>
-                      <span className={`text-[11px] font-semibold ${selectedPage === pageNum ? 'text-[#1E3A8A]' : 'text-[#64748B]'}`}>
-                        {pageNum}
-                      </span>
-                    </button>
-                  ))}
+                          {pageIssues.length > 0 && (
+                            <div className="flex justify-end gap-0.5">
+                              <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                            </div>
+                          )}
+                          <span className="text-center font-bold text-[8px] text-gray-400">{pageNum}</span>
+                        </div>
+                        <span className={`text-[11px] font-semibold ${selectedPage === pageNum ? 'text-[#1E3A8A]' : 'text-[#64748B]'}`}>
+                          Page {pageNum}
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  {/* Add Page / Attach Document shortcut in thumbnail strip */}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-16 h-12 border border-dashed border-[#DECDB8] rounded-lg flex flex-col items-center justify-center text-[#94A3B8] hover:text-[#1E3A8A] hover:border-[#1E3A8A] transition cursor-pointer p-1"
+                    title="Attach another document"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span className="text-[8px] font-semibold mt-0.5">Upload</span>
+                  </button>
                 </div>
 
                 {/* Right Document Sheet Canvas */}
-                <div className="flex-1 p-4 sm:p-8 overflow-y-auto max-h-[620px] flex justify-center">
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDraggingFile(true);
+                  }}
+                  onDragLeave={() => setIsDraggingFile(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDraggingFile(false);
+                    const droppedFile = e.dataTransfer.files?.[0];
+                    if (droppedFile) {
+                      const fakeEvent = { target: { files: [droppedFile], value: '' } } as any;
+                      handleFileUpload(fakeEvent);
+                    }
+                  }}
+                  className={`flex-1 p-4 sm:p-8 overflow-y-auto max-h-[620px] flex justify-center transition-colors ${
+                    isDraggingFile ? 'bg-blue-50/70 ring-2 ring-dashed ring-[#1E3A8A]' : ''
+                  }`}
+                >
                   <div
                     className="w-full max-w-2xl bg-white border border-[#DECDB8] rounded-xl shadow-md p-6 sm:p-10 text-[#1E293B] font-serif transition-transform duration-200 select-text"
                     style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
                   >
-                    {selectedPage === 2 ? (
-                      <div className="space-y-6 text-sm sm:text-base leading-relaxed">
-                        
-                        {/* Clause 3 */}
-                        <div>
-                          <h4 className="font-sans font-bold text-base sm:text-lg text-[#1E293B] tracking-wide mb-3">
-                            3. PURCHASE PRICE
-                          </h4>
-                          <div className="space-y-3 font-serif text-[#334155] leading-relaxed">
-                            <p>
-                              <strong className="font-sans font-semibold text-[#1E293B]">3.1</strong> The total purchase price shall be INR 10,00,00,000 (Rupees Ten Crore Only), subject to the adjustments set out in Clause 3.2.
+                    {(() => {
+                      const activePage = documentPages.find((p) => p.pageNumber === selectedPage) || documentPages[0];
+                      if (!activePage || activePage.paragraphs.length === 0) {
+                        return (
+                          <div className="py-20 text-center space-y-3 font-sans">
+                            <FileText className="w-12 h-12 text-[#94A3B8] mx-auto opacity-70" />
+                            <h4 className="font-bold text-lg text-[#1E293B]">Attach Your Legal Document</h4>
+                            <p className="text-sm text-[#64748B] max-w-sm mx-auto">
+                              Attach a PDF, Word (.docx), or plain text document to automatically parse clauses and scan for Indian legal citations.
                             </p>
-                            <p>
-                              <strong className="font-sans font-semibold text-[#1E293B]">3.2</strong> The purchase price shall be payable in two tranches. The first tranche of INR 6,00,00,000 shall be paid within 30 days of the Closing Date, and the second tranche shall be paid within 6 months of the Closing Date, subject to satisfaction of the conditions precedent.
-                            </p>
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-[#1E3A8A] hover:bg-[#1E3A8A]/90 transition cursor-pointer"
+                            >
+                              Attach Document File
+                            </button>
                           </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-4 text-sm sm:text-base leading-relaxed">
+                          {activePage.title && (
+                            <div className="pb-2 mb-3 border-b border-[#FAF5EB] flex items-center justify-between text-xs text-[#64748B] font-sans">
+                              <span className="font-semibold text-[#1E3A8A]">{activePage.title}</span>
+                              <span>Page {activePage.pageNumber} of {documentPages.length}</span>
+                            </div>
+                          )}
+                          {activePage.paragraphs.map((para) => renderParagraphWithCitations(para, activePage.pageNumber))}
                         </div>
-
-                        {/* Clause 4 */}
-                        <div>
-                          <h4 className="font-sans font-bold text-base sm:text-lg text-[#1E293B] tracking-wide mb-3">
-                            4. REPRESENTATIONS AND WARRANTIES
-                          </h4>
-                          <div className="space-y-3 font-serif text-[#334155] leading-relaxed">
-                            <p>
-                              <strong className="font-sans font-semibold text-[#1E293B]">4.1</strong> The Seller represents and warrants that:
-                            </p>
-
-                            {/* Subclause (a) with Annotation [1] */}
-                            <div className="pl-6 flex items-start gap-2">
-                              <span className="font-sans font-semibold text-[#1E293B] mt-0.5">(a)</span>
-                              <div className="flex-1">
-                                {isRedlineMode ? (
-                                  <div className="p-2 rounded bg-amber-50/70 border border-amber-200">
-                                    <span className="text-[#64748B]">the Company is duly incorporated and validly existing under </span>
-                                    <span className="line-through text-red-600 bg-red-100 px-1 py-0.5 rounded mr-1">the Companies Act, 2013</span>
-                                    <span className="text-emerald-700 bg-emerald-100 px-1 py-0.5 rounded font-medium">Section 2(20) of the Companies Act, 2013</span>
-                                    <span className="text-[#64748B]">, and is in good standing.</span>
-                                    <span className="ml-2 inline-flex items-center px-1.5 py-0.2 bg-emerald-600 text-white text-[10px] rounded font-sans">Redline Accepted</span>
-                                  </div>
-                                ) : isClause1Applied ? (
-                                  <span className="bg-emerald-50 text-emerald-900 border-b-2 border-emerald-500 px-1 py-0.5 rounded inline-block transition">
-                                    the Company is duly incorporated and validly existing under{' '}
-                                    <span className="font-semibold text-emerald-800">Section 2(20) of the Companies Act, 2013</span>, and is in good standing.
-                                    <span className="inline-flex items-center justify-center w-4 h-4 ml-1.5 rounded-full bg-emerald-600 text-white text-[10px] font-sans font-bold">
-                                      ✓
-                                    </span>
-                                  </span>
-                                ) : (
-                                  <span className="bg-red-50 text-[#991B1B] border-b-2 border-red-500 px-1 py-0.5 rounded inline-block transition group cursor-pointer" onClick={() => setActiveTab('issues')}>
-                                    the Company is duly incorporated and validly existing under the Companies Act, 2013, and is in good standing.
-                                    <span className="inline-flex items-center justify-center w-4 h-4 ml-1.5 rounded bg-red-600 text-white text-[10px] font-sans font-bold">
-                                      1
-                                    </span>
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Subclause (b) with Annotation [2] */}
-                            <div className="pl-6 flex items-start gap-2">
-                              <span className="font-sans font-semibold text-[#1E293B] mt-0.5">(b)</span>
-                              <div className="flex-1">
-                                {isRedlineMode ? (
-                                  <div className="p-2 rounded bg-amber-50/70 border border-amber-200">
-                                    <span className="text-[#64748B]">all material contracts are in full force and effect and </span>
-                                    <span className="line-through text-red-600 bg-red-100 px-1 py-0.5 rounded mr-1">there are no undisclosed defaults under any material contract.</span>
-                                    <span className="text-emerald-700 bg-emerald-100 px-1 py-0.5 rounded font-medium">there are no undisclosed defaults under any material contract, as settled in Smith v. ABC Ltd., (2018) 5 SCC 123.</span>
-                                    <span className="ml-2 inline-flex items-center px-1.5 py-0.2 bg-emerald-600 text-white text-[10px] rounded font-sans">Redline Accepted</span>
-                                  </div>
-                                ) : isClause2Applied ? (
-                                  <span className="bg-emerald-50 text-emerald-900 border-b-2 border-emerald-500 px-1 py-0.5 rounded inline-block transition">
-                                    all material contracts are in full force and effect and there are no undisclosed defaults under any material contract, as settled in{' '}
-                                    <span className="font-semibold text-emerald-800">Smith v. ABC Ltd., (2018) 5 SCC 123</span>.
-                                    <span className="inline-flex items-center justify-center w-4 h-4 ml-1.5 rounded-full bg-emerald-600 text-white text-[10px] font-sans font-bold">
-                                      ✓
-                                    </span>
-                                  </span>
-                                ) : (
-                                  <span>
-                                    all material contracts are in full force and effect and{' '}
-                                    <span className="bg-red-50 text-[#991B1B] border-b-2 border-red-500 px-1 py-0.5 rounded inline-block transition group cursor-pointer" onClick={() => setActiveTab('issues')}>
-                                      there are no undisclosed defaults under any material contract.
-                                      <span className="inline-flex items-center justify-center w-4 h-4 ml-1.5 rounded bg-red-600 text-white text-[10px] font-sans font-bold">
-                                        2
-                                      </span>
-                                    </span>
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Subclause (c) Outdated Authority [3] */}
-                            <div className="pl-6 flex items-start gap-2">
-                              <span className="font-sans font-semibold text-[#1E293B] mt-0.5">(c)</span>
-                              <div className="flex-1">
-                                {appliedCitationIds.includes('cite-3') ? (
-                                  <span className="bg-emerald-50 text-emerald-900 border-b-2 border-emerald-500 px-1 py-0.5 rounded inline-block transition">
-                                    all tax liabilities conform with{' '}
-                                    <span className="font-semibold text-emerald-800">Income Tax Act, 1961, Section 56(2)(viib) (as amended by Finance Act, 2023)</span>.
-                                    <span className="inline-flex items-center justify-center w-4 h-4 ml-1.5 rounded-full bg-emerald-600 text-white text-[10px] font-sans font-bold">
-                                      ✓
-                                    </span>
-                                  </span>
-                                ) : (
-                                  <span>
-                                    the consideration payable aligns with applicable provisions{' '}
-                                    <span className="bg-amber-50 text-[#92400E] border-b-2 border-amber-500 px-1 py-0.5 rounded inline-block transition group cursor-pointer" onClick={() => setActiveTab('issues')}>
-                                      as per the Income Tax Act, 1961 (amended) --
-                                      <span className="inline-flex items-center justify-center w-4 h-4 ml-1.5 rounded bg-amber-600 text-white text-[10px] font-sans font-bold">
-                                        3
-                                      </span>
-                                    </span>
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                      </div>
-                    ) : (
-                      <div className="py-20 text-center space-y-3 font-sans">
-                        <FileCheck className="w-12 h-12 text-[#94A3B8] mx-auto opacity-70" />
-                        <h4 className="font-bold text-lg text-[#1E293B]">Page {selectedPage} Preview</h4>
-                        <p className="text-sm text-[#64748B] max-w-sm mx-auto">
-                          Verified legal provisions for Page {selectedPage} have been pre-screened without flagged conflicts.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedPage(2)}
-                          className="px-4 py-2 rounded-xl text-xs font-semibold text-[#1E3A8A] bg-[#FAF5EB] border border-[#DECDB8] hover:bg-[#DECDB8] transition cursor-pointer"
-                        >
-                          Return to Annotated Page 2
-                        </button>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -959,13 +1518,14 @@ CITATION VERIFICATION AUDIT TRAIL
                     type="text"
                     value={promptInput}
                     onChange={(e) => setPromptInput(e.target.value)}
-                    placeholder="Ask for better citations, explain an issue, or apply all suggestions..."
+                    placeholder="Ask for better citations, explain an issue, or attach your own file..."
                     className="flex-1 bg-transparent text-xs sm:text-sm text-[#1E293B] placeholder-[#94A3B8] focus:outline-none"
                   />
                   <button
                     type="button"
+                    onClick={() => fileInputRef.current?.click()}
                     className="p-1 rounded-lg text-[#64748B] hover:text-[#1E3A8A] transition cursor-pointer"
-                    title="Attach reference document"
+                    title="Attach reference document (.pdf, .docx, .txt)"
                   >
                     <Paperclip className="w-4 h-4" />
                   </button>

@@ -310,6 +310,18 @@ export const api = {
       return { success: false, message: e.message };
     }
   },
+  verifyDocument: async (text: string, citations?: any[]): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/verify`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ text, citations, isDemo: true }),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
 
   // --- Research ---
   getResearchThreads: async (): Promise<ApiResponse> => {
