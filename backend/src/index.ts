@@ -68,17 +68,17 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
 
 // Start Server
 const startServer = async () => {
+  const server = app.listen(Number(PORT), '0.0.0.0', () => {
+    console.log(`[DraftMate Server] Running on http://0.0.0.0:${PORT}`);
+    console.log(`[Auth API] Available at /api/auth`);
+    console.log(`[App API] Available at /api`);
+  });
+
   try {
     await connectDB();
     await seedInitialDatabase();
-    app.listen(PORT, () => {
-      console.log(`[DraftMate Server] Running on http://localhost:${PORT}`);
-      console.log(`[Auth API] Available at http://localhost:${PORT}/api/auth`);
-      console.log(`[App API] Available at http://localhost:${PORT}/api`);
-    });
   } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
+    console.error('[Startup Database Warning]: Failed to connect to MongoDB. Server is still listening for health checks, but DB operations will fail until MONGODB_URI is configured correctly in Render dashboard:', error);
   }
 };
 
