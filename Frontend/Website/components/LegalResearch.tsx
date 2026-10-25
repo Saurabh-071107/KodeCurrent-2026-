@@ -50,136 +50,7 @@ export interface ConversationThread {
   messages: ChatMessage[];
 }
 
-const INITIAL_CONVERSATIONS: ConversationThread[] = [
-  {
-    id: 'conv-1',
-    title: 'Section 138 latest judgments',
-    time: '10:42 AM',
-    group: 'Today',
-    messages: [
-      {
-        id: 'msg-1-1',
-        sender: 'user',
-        content: 'What are the latest Supreme Court rulings regarding interim compensation under Section 143A and presumption under Section 139 of the Negotiable Instruments Act, 1881?',
-        timestamp: '10:40 AM'
-      },
-      {
-        id: 'msg-1-2',
-        sender: 'assistant',
-        content: `Under Section 138 read with Section 139 and Section 143A of the Negotiable Instruments Act, 1881, the Supreme Court has laid down significant precedents regarding interim compensation and statutory presumptions:\n\n1. **Nature of Section 143A (Interim Compensation):**\nIn *Rakesh Ranjan Shrivastava v. State of Jharkhand (2024)*, the Hon'ble Supreme Court clarified that the power under Section 143A to grant interim compensation (up to 20% of the cheque amount) is **directory and not mandatory**. The trial court must exercise sound judicial discretion, considering whether a prima facie case exists, financial capacity, and merits of the defence.\n\n2. **Statutory Presumption under Section 139:**\nIn *Bir Singh v. Mukesh Kumar (2019)* and reiterated in *Kalamani Tex v. P. Balasubramanian (2021)*, once the execution of the cheque is admitted, the presumption under Section 139 operates against the drawer. The burden shifts to the accused to rebut this presumption on a preponderance of probabilities.\n\n3. **Notice & Cause of Action:**\nStatutory notice under proviso (b) to Section 138 must be dispatched within 30 days of dishonour memo receipt. Cause of action crystallises after expiry of 15 days from receipt of notice by the drawer.`,
-        timestamp: '10:42 AM',
-        citations: [
-          { title: 'Rakesh Ranjan Shrivastava v. State of Jharkhand', court: 'Supreme Court of India', year: '2024', citation: '2024 INSC 211' },
-          { title: 'Kalamani Tex & Anr. v. P. Balasubramanian', court: 'Supreme Court of India', year: '2021', citation: '(2021) 5 SCC 283' },
-          { title: 'Bir Singh v. Mukesh Kumar', court: 'Supreme Court of India', year: '2019', citation: '(2019) 4 SCC 197' }
-        ],
-        statutes: [
-          { act: 'Negotiable Instruments Act, 1881', section: 'Section 138', description: 'Dishonour of cheque for insufficiency, etc., of funds in the account' },
-          { act: 'Negotiable Instruments Act, 1881', section: 'Section 139', description: 'Presumption in favour of holder in due course' },
-          { act: 'Negotiable Instruments Act, 1881', section: 'Section 143A', description: 'Power to direct interim compensation' }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'conv-2',
-    title: 'Draft legal notice',
-    time: '09:15 AM',
-    group: 'Today',
-    messages: [
-      {
-        id: 'msg-2-1',
-        sender: 'user',
-        content: 'Draft a legal notice for recovery of outstanding commercial dues with 18% per annum interest.',
-        timestamp: '09:15 AM'
-      }
-    ]
-  },
-  {
-    id: 'conv-3',
-    title: 'Anticipatory bail conditions',
-    time: '08:20 AM',
-    group: 'Today',
-    messages: [
-      {
-        id: 'msg-3-1',
-        sender: 'user',
-        content: 'What are the mandatory parameters for granting anticipatory bail under Section 438 CrPC / Section 482 BNSS in economic offences?',
-        timestamp: '08:20 AM'
-      }
-    ]
-  },
-  {
-    id: 'conv-4',
-    title: 'Digital Personal Data Protection Act summary',
-    time: '11:30 PM',
-    group: 'Yesterday',
-    messages: [
-      {
-        id: 'msg-4-1',
-        sender: 'user',
-        content: 'Summarise key compliance requirements for Significant Data Fiduciaries under the DPDP Act, 2023.',
-        timestamp: '11:30 PM'
-      }
-    ]
-  },
-  {
-    id: 'conv-5',
-    title: 'Medical negligence cases',
-    time: '06:14 PM',
-    group: 'Yesterday',
-    messages: [
-      {
-        id: 'msg-5-1',
-        sender: 'user',
-        content: 'Explain the application of the Bolam Test and Jacob Mathew guidelines in medical negligence litigation.',
-        timestamp: '06:14 PM'
-      }
-    ]
-  },
-  {
-    id: 'conv-6',
-    title: 'RTI Act key provisions',
-    time: '12 Oct 2026',
-    group: 'This Week',
-    messages: [
-      {
-        id: 'msg-6-1',
-        sender: 'user',
-        content: 'Exemption clauses under Section 8(1) of the Right to Information Act, 2005.',
-        timestamp: '12 Oct 2026'
-      }
-    ]
-  },
-  {
-    id: 'conv-7',
-    title: 'Landlord tenant laws',
-    time: '11 Oct 2026',
-    group: 'This Week',
-    messages: [
-      {
-        id: 'msg-7-1',
-        sender: 'user',
-        content: 'Grounds of eviction under Rent Control Acts and requirement of bona fide personal need.',
-        timestamp: '11 Oct 2026'
-      }
-    ]
-  },
-  {
-    id: 'conv-8',
-    title: 'Compare Sec 302 and 304',
-    time: '10 Oct 2026',
-    group: 'This Week',
-    messages: [
-      {
-        id: 'msg-8-1',
-        sender: 'user',
-        content: 'Distinction between Murder (Section 302 IPC / Section 103 BNS) and Culpable Homicide not amounting to murder (Section 304 IPC / Section 105 BNS).',
-        timestamp: '10 Oct 2026'
-      }
-    ]
-  }
-];
+const INITIAL_CONVERSATIONS: ConversationThread[] = [];
 
 const QUICK_ACTIONS = [
   {
@@ -242,9 +113,11 @@ export default function LegalResearch({
   const [isTyping, setIsTyping] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeConversation = conversations.find(c => c.id === activeConvId);
 
@@ -270,10 +143,32 @@ export default function LegalResearch({
     setMobileDrawerOpen(false);
   };
 
+  // Delete a conversation thread
+  const handleDeleteConversation = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConversations(prev => prev.filter(c => c.id !== id));
+    if (activeConvId === id) {
+      setActiveConvId(null);
+    }
+    setActiveMenuId(null);
+  };
+
+  // Handle document file attachment
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setInputMessage(prev => {
+      const tag = `[Attached Document: ${file.name}] `;
+      return prev ? `${tag}${prev}` : `${tag}Please extract legal citations and provide statutory research for this document.`;
+    });
+    if (inputRef.current) inputRef.current.focus();
+    e.target.value = '';
+  };
+
   // Submit a query
   const handleSendMessage = (textToSend?: string) => {
     const query = (textToSend || inputMessage).trim();
-    if (!query) return;
+    if (!query || isTyping) return;
 
     if (!activeConvId) {
       // Create new conversation
@@ -296,7 +191,7 @@ export default function LegalResearch({
       setConversations([newThread, ...conversations]);
       setActiveConvId(newId);
       setInputMessage('');
-      simulateAIResponse(newId, query);
+      executeLegalResearch(newId, query);
     } else {
       // Append to active conversation
       const userMsg: ChatMessage = {
@@ -319,51 +214,41 @@ export default function LegalResearch({
       );
 
       setInputMessage('');
-      simulateAIResponse(activeConvId, query);
+      executeLegalResearch(activeConvId, query);
     }
   };
 
-  // Simulated AI Legal Research Response
-  const simulateAIResponse = (threadId: string, userQuery: string) => {
+  // Execute Legal Research via Backend API (Strictly Live API, No Hardcoded Mocks)
+  const executeLegalResearch = async (threadId: string, userQuery: string) => {
     setIsTyping(true);
 
-    setTimeout(() => {
-      let responseContent = '';
-      let citations: ChatMessage['citations'] = [];
-      let statutes: ChatMessage['statutes'] = [];
+    try {
+      const res = await api.askResearchQuestion({
+        question: userQuery,
+        searchMode: selectedMode,
+        threadId,
+      });
 
-      if (userQuery.toLowerCase().includes('138') || userQuery.toLowerCase().includes('cheque')) {
-        responseContent = `Under Section 138 of the Negotiable Instruments Act, 1881, the criminal offence of cheque bounce requires the satisfaction of strict statutory ingredients:\n\n1. **Drawing of Cheque & Legal Liability:** The cheque must have been issued in discharge, in whole or in part, of any legally enforceable debt or other liability.\n\n2. **Bank Dishonour:** The cheque must be presented within its validity period (3 months) and returned unpaid due to insufficiency of funds or account closed.\n\n3. **Statutory Demand Notice:** The payee must make a demand for payment in writing within 30 days of receiving the memo of dishonour.\n\n4. **15-Day Grace Period:** The drawer is afforded 15 days from notice receipt to pay. Failure to pay creates the cause of action.\n\n5. **Recent Precedent:** In *Sunil Todi v. State of Gujarat (2022)*, the Supreme Court ruled that a cheque issued as "security" can also attract Section 138 if a debt existed on the date of presentation.`;
-        citations = [
-          { title: 'Sunil Todi & Ors. v. State of Gujarat & Anr.', court: 'Supreme Court of India', year: '2022', citation: '(2022) 16 SCC 760' },
-          { title: 'Dashrath Rupsingh Rathod v. State of Maharashtra', court: 'Supreme Court of India', year: '2014', citation: '(2014) 9 SCC 129' }
-        ];
-        statutes = [
-          { act: 'Negotiable Instruments Act, 1881', section: 'Section 138', description: 'Dishonour of cheque for insufficiency of funds' },
-          { act: 'Negotiable Instruments Act, 1881', section: 'Section 142', description: 'Cognizance of offences' }
-        ];
-      } else if (userQuery.toLowerCase().includes('bail')) {
-        responseContent = `The grant of anticipatory bail is governed by equitable principles balancing personal liberty under Article 21 and the integrity of criminal investigation:\n\n1. **Parameters Established in *Sushila Aggarwal (2020)*:**\n- Anticipatory bail need not be for a limited duration and normally continues until trial.\n- Considerations include nature and gravity of accusation, role attributed, criminal antecedents, and flight risk.\n\n2. **Cooperation with Investigation:**\nThe accused must make themselves available for interrogation as required under Section 438(2) CrPC / Section 482(2) BNSS and not tamper with evidence or witness testimony.`;
-        citations = [
-          { title: 'Sushila Aggarwal & Ors. v. State (NCT of Delhi)', court: 'Supreme Court of India (Constitution Bench)', year: '2020', citation: '(2020) 5 SCC 1' },
-          { title: 'Gurbaksh Singh Sibbia v. State of Punjab', court: 'Supreme Court of India', year: '1980', citation: '(1980) 2 SCC 565' }
-        ];
+      let aiMsg: ChatMessage;
+
+      if (res.success && res.data) {
+        aiMsg = {
+          id: res.data.id || `msg-${Date.now()}-ai`,
+          sender: 'assistant',
+          content: res.data.content,
+          timestamp: res.data.timestamp || 'Just now',
+          citations: res.data.citations || [],
+          statutes: res.data.statutes || []
+        };
       } else {
-        responseContent = `Based on Indian legal principles and statutory provisions, here is the legal analysis for your research query:\n\n1. **Statutory Framework:**\nThe matter is primarily governed by codified statutory provisions and established judicial doctrine under the Constitution of India and relevant procedural codes.\n\n2. **Ratio Decidendi & Standard of Proof:**\nThe courts apply the doctrine of judicial precedent (*stare decisis*). In civil matters, the standard of proof is on a preponderance of probabilities, whereas criminal culpability requires proof beyond reasonable doubt.\n\n3. **Practical Strategy:**\nIt is advisable to verify statutory limitations, jurisdictional prerequisites, and procedural compliances before instituting formal pleadings.`;
-        citations = [
-          { title: 'Kesavananda Bharati v. State of Kerala', court: 'Supreme Court of India', year: '1973', citation: '(1973) 4 SCC 225' },
-          { title: 'Maneka Gandhi v. Union of India', court: 'Supreme Court of India', year: '1978', citation: '(1978) 1 SCC 248' }
-        ];
+        const errorDetail = (res as any)?.error?.message || 'Upstream AI Service was unable to answer the query.';
+        aiMsg = {
+          id: `msg-${Date.now()}-err`,
+          sender: 'assistant',
+          content: `⚠️ **AI Service Error:**\n\n${errorDetail}\n\n*Please ensure that your AI API service is reachable.*`,
+          timestamp: 'Just now'
+        };
       }
-
-      const aiMsg: ChatMessage = {
-        id: `msg-${Date.now()}-ai`,
-        sender: 'assistant',
-        content: responseContent,
-        timestamp: 'Just now',
-        citations,
-        statutes
-      };
 
       setConversations(prev =>
         prev.map(c => {
@@ -376,9 +261,28 @@ export default function LegalResearch({
           return c;
         })
       );
-
+    } catch (err: any) {
+      console.error('Legal research error:', err);
+      const networkMsg: ChatMessage = {
+        id: `msg-${Date.now()}-err`,
+        sender: 'assistant',
+        content: `⚠️ **API Connection Failed:**\n\n${err?.message || 'Unable to establish connection to the AI backend.'}`,
+        timestamp: 'Just now'
+      };
+      setConversations(prev =>
+        prev.map(c => {
+          if (c.id === threadId) {
+            return {
+              ...c,
+              messages: [...c.messages, networkMsg]
+            };
+          }
+          return c;
+        })
+      );
+    } finally {
       setIsTyping(false);
-    }, 1200);
+    }
   };
 
   // Copy message text
@@ -492,16 +396,33 @@ export default function LegalResearch({
                         </div>
 
                         {/* 3-dots Menu Button */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                          }}
-                          className="p-1 text-[#94A3B8] hover:text-[#0F172A] rounded transition-colors opacity-70 group-hover:opacity-100"
-                          aria-label="More options"
-                        >
-                          <MoreVertical className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuId(activeMenuId === conv.id ? null : conv.id);
+                            }}
+                            className="p-1 text-[#94A3B8] hover:text-[#0F172A] rounded transition-colors opacity-70 group-hover:opacity-100"
+                            aria-label="More options"
+                          >
+                            <MoreVertical className="w-3.5 h-3.5" />
+                          </button>
+                          {activeMenuId === conv.id && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute right-0 top-full mt-1 w-28 bg-white border border-[#DECDB8] rounded-xl shadow-lg py-1 z-30"
+                            >
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteConversation(conv.id, e)}
+                                className="w-full text-left px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-1.5 transition-colors cursor-pointer"
+                              >
+                                <span>Delete thread</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -793,12 +714,20 @@ export default function LegalResearch({
                 {/* Paperclip Attachment Button */}
                 <button
                   type="button"
+                  onClick={() => fileInputRef.current?.click()}
                   className="p-1.5 text-[#64748B] hover:text-[#0F172A] rounded-full hover:bg-[#FAF8F5] transition-colors cursor-pointer shrink-0"
                   title="Attach legal document or citation"
                   aria-label="Attach file"
                 >
                   <Paperclip className="w-4 h-4" />
                 </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={handleFileUpload}
+                  accept=".pdf,.doc,.docx,.txt"
+                  className="hidden"
+                />
 
                 {/* Question Input */}
                 <input

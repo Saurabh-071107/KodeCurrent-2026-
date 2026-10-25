@@ -21,14 +21,23 @@ import {
   addClientNote,
   addClientCommunication,
   getBareActs,
+  getBareActById,
+  searchBareActs,
+  explainBareAct,
+  askNexoraAi,
   getLibraryData,
   getVerificationReport,
   verifyDocumentWithAi,
   getResearchThreads,
   askResearchQuestion,
   getStudentAssets,
+  startCourtroomSession,
+  submitCourtroomArgument,
+  endCourtroomSession,
+  getCourtroomSession,
   submitCourtroomTurn,
   submitExam,
+  generateMootMemorial,
   getTranslationData,
   createTranslationJob,
   askCitizenQuestion,
@@ -37,7 +46,13 @@ import {
   confirmVoiceAction,
   uploadDocument,
   listDocuments,
-  deleteDocument
+  deleteDocument,
+  parseDocumentFile,
+  extractReferenceStyle,
+  getReferenceStyles,
+  getTtsPreferences,
+  updateTtsPreferences,
+  synthesizeTts
 } from '../controllers/api.controller';
 import { authenticateToken, optionalAuthenticateToken } from '../middleware/auth.middleware';
 
@@ -47,11 +62,19 @@ const router = Router();
 // Public Knowledge & Catalog Routes (Unauthenticated)
 // -------------------------------------------------------------------
 router.get('/bare-acts', getBareActs);
+router.get('/bare-acts/search', searchBareActs);
+router.post('/bare-acts/explain', explainBareAct);
+router.get('/bare-acts/:id', getBareActById);
 router.get('/library', getLibraryData);
+router.get('/library/:tab', getLibraryData);
 router.get('/citizen/glossary', getCitizenGlossary);
 router.get('/templates', getTemplates);
 router.get('/templates/:id', getTemplateById);
 router.get('/verify/sample', getVerificationReport);
+
+// NEXORA AI Assistant Routes
+router.post('/ai/nexora/chat', optionalAuthenticateToken, askNexoraAi);
+router.post('/nexora/chat', optionalAuthenticateToken, askNexoraAi);
 
 // -------------------------------------------------------------------
 // Protected Application Routes (Strictly Authenticated)
@@ -91,18 +114,32 @@ router.post('/clients/:id/notes', authenticateToken, addClientNote);
 router.post('/clients/:id/communications', authenticateToken, addClientCommunication);
 
 // 6. Verification & Review
-router.post('/verify', authenticateToken, verifyDocumentWithAi);
-router.post('/ai/documents/verify', authenticateToken, verifyDocumentWithAi);
+router.post('/verify', optionalAuthenticateToken, verifyDocumentWithAi);
+router.post('/ai/documents/verify', optionalAuthenticateToken, verifyDocumentWithAi);
 
 // 7. Research (Scoped to user)
 router.get('/research/threads', optionalAuthenticateToken, getResearchThreads);
 router.post('/research/chat', optionalAuthenticateToken, askResearchQuestion);
 router.post('/ai/research/chat', optionalAuthenticateToken, askResearchQuestion);
 
-// 8. Student Center
-router.get('/student/assets', authenticateToken, getStudentAssets);
-router.post('/student/courtroom/sessions/:id/turns', authenticateToken, submitCourtroomTurn);
-router.post('/student/tests/:id/submit', authenticateToken, submitExam);
+// 8. Student Center & Live Courtroom Engine
+router.get('/student/assets', optionalAuthenticateToken, getStudentAssets);
+router.post('/student/courtroom/start', optionalAuthenticateToken, startCourtroomSession);
+router.post('/student/courtroom/argument', optionalAuthenticateToken, submitCourtroomArgument);
+router.post('/student/courtroom/end', optionalAuthenticateToken, endCourtroomSession);
+router.post('/student/courtroom/:id/end', optionalAuthenticateToken, endCourtroomSession);
+router.get('/student/courtroom/:id', optionalAuthenticateToken, getCourtroomSession);
+router.post('/student/courtroom/sessions/:id/turns', optionalAuthenticateToken, submitCourtroomTurn);
+
+// Direct courtroom.ai API compatibility aliases
+router.post('/hearing/start', optionalAuthenticateToken, startCourtroomSession);
+router.post('/hearing/argument', optionalAuthenticateToken, submitCourtroomArgument);
+router.post('/hearing/:id/end', optionalAuthenticateToken, endCourtroomSession);
+router.get('/hearing/:id', optionalAuthenticateToken, getCourtroomSession);
+
+router.post('/student/tests/:id/submit', optionalAuthenticateToken, submitExam);
+router.post('/student/moot/generate', optionalAuthenticateToken, generateMootMemorial);
+router.post('/ai/moot/workflow', optionalAuthenticateToken, generateMootMemorial);
 
 // 9. Translation
 router.get('/translation/data', optionalAuthenticateToken, getTranslationData);
@@ -119,5 +156,13 @@ router.post('/ai/voice/confirm', authenticateToken, confirmVoiceAction);
 router.post('/documents/upload', authenticateToken, uploadDocument);
 router.get('/documents', authenticateToken, listDocuments);
 router.delete('/documents/:id', authenticateToken, deleteDocument);
+router.post('/documents/parse-file', optionalAuthenticateToken, parseDocumentFile);
+router.post('/documents/reference-style', optionalAuthenticateToken, extractReferenceStyle);
+router.get('/documents/reference-style', optionalAuthenticateToken, getReferenceStyles);
+
+// 13. Universal Read Aloud & TTS Preferences
+router.get('/user/preferences/tts', optionalAuthenticateToken, getTtsPreferences);
+router.put('/user/preferences/tts', authenticateToken, updateTtsPreferences);
+router.post('/ai/tts/synthesize', optionalAuthenticateToken, synthesizeTts);
 
 export default router;

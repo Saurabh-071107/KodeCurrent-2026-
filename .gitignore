@@ -7,10 +7,13 @@ node_modules/
 
 # Environment files
 .env
+.env.*
 .env*.local
 *.env
+*.env.*
 !.env.example
 !*/.env.example
+!**/.env.example
 
 # Next.js build output
 .next/
@@ -65,6 +68,14 @@ Thumbs.db
 
 # TypeScript build info
 *.tsbuildinfo
+Frontend/Website/tsconfig.tsbuildinfo
+
+# Scratch & extracted files
+extracted_page_4_img_1.jpeg
+HACKATHON_PROBLEM_STATEMENT.pdf
 
 # Next.js agent rules
 AGENTS.md
+
+# Cloned source repositories
+courtroom-ai-source/

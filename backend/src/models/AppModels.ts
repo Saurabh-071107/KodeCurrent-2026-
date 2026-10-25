@@ -336,3 +336,227 @@ const auditLogSchema = new Schema<IAuditLog>({
 
 export const AuditLog = model<IAuditLog>('AuditLog', auditLogSchema);
 
+// 10. ResearchThread
+export interface IResearchMessage {
+  id: string;
+  sender: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  citations?: any[];
+  statutes?: any[];
+}
+
+export interface IResearchThread extends Document {
+  id: string;
+  userId?: string;
+  title: string;
+  time: string;
+  group: 'Today' | 'Yesterday' | 'This Week';
+  messages: IResearchMessage[];
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+const researchThreadSchema = new Schema<IResearchThread>({
+  id: { type: String, required: true, unique: true },
+  userId: { type: String, index: true },
+  title: { type: String, required: true },
+  time: { type: String, default: 'Just now' },
+  group: { type: String, default: 'Today' },
+  messages: [{ type: Schema.Types.Mixed, default: [] }],
+}, { timestamps: true });
+
+export const ResearchThread = model<IResearchThread>('ResearchThread', researchThreadSchema);
+
+// 11. ReferenceStyleProfile (Requirement 4 & Single Source of Truth)
+export interface IReferenceStyleProfile extends Document {
+  id: string;
+  userId?: string;
+  name: string;
+  tone: string;
+  structurePattern: string;
+  numberingFormat: string;
+  terminologyGlossary: Array<{ term: string; usage: string } | string>;
+  formattingConventions: Record<string, any>;
+  clausePatterns: Array<{ clauseType: string; observedStructure: string }>;
+  adaptedSummary?: string;
+  sampleSnippet?: string;
+  sourceFilename?: string;
+  isDefault?: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+const referenceStyleSchema = new Schema<IReferenceStyleProfile>({
+  id: { type: String, required: true, unique: true },
+  userId: { type: String, index: true },
+  name: { type: String, required: true },
+  tone: { type: String, default: 'Formal Legal' },
+  structurePattern: { type: String, default: 'Standard Legal' },
+  numberingFormat: { type: String, default: 'Sequential (1, 2, 3)' },
+  terminologyGlossary: [{ type: Schema.Types.Mixed, default: [] }],
+  formattingConventions: { type: Schema.Types.Mixed, default: {} },
+  clausePatterns: [{ type: Schema.Types.Mixed, default: [] }],
+  adaptedSummary: { type: String },
+  sampleSnippet: { type: String },
+  sourceFilename: { type: String },
+  isDefault: { type: Boolean, default: false },
+}, { timestamps: true });
+
+export const ReferenceStyleProfile = model<IReferenceStyleProfile>('ReferenceStyleProfile', referenceStyleSchema);
+
+// 12. CitationVerificationRecord (Requirement 6 & Persistent Verification Results)
+export interface ICitationVerificationRecord extends Document {
+  id: string;
+  userId?: string;
+  documentId?: string;
+  documentTitle?: string;
+  rawText?: string;
+  score: number;
+  totalCitations: number;
+  verifiedCount: number;
+  issueCount: number;
+  citations: Array<any>;
+  summary: Record<string, any>;
+  legacyFlags?: Array<any>;
+  verifiedAt: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+const citationVerificationSchema = new Schema<ICitationVerificationRecord>({
+  id: { type: String, required: true, unique: true },
+  userId: { type: String, index: true },
+  documentId: { type: String, index: true },
+  documentTitle: { type: String },
+  rawText: { type: String },
+  score: { type: Number, default: 100 },
+  totalCitations: { type: Number, default: 0 },
+  verifiedCount: { type: Number, default: 0 },
+  issueCount: { type: Number, default: 0 },
+  citations: [{ type: Schema.Types.Mixed, default: [] }],
+  summary: { type: Schema.Types.Mixed, default: {} },
+  legacyFlags: [{ type: Schema.Types.Mixed, default: [] }],
+  verifiedAt: { type: Date, default: Date.now },
+}, { timestamps: true });
+
+export const CitationVerificationRecord = model<ICitationVerificationRecord>('CitationVerificationRecord', citationVerificationSchema);
+
+// 13. VoiceCommandLog (Requirement 7 & Voice Workflow Auditability)
+export interface IVoiceCommandLog extends Document {
+  id: string;
+  userId?: string;
+  transcript: string;
+  interpretedAction: string;
+  target?: string;
+  requiresConfirm: boolean;
+  confirmToken?: string;
+  status: 'interpreted' | 'confirmed' | 'rejected' | 'failed';
+  metadata?: Record<string, any>;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+const voiceCommandLogSchema = new Schema<IVoiceCommandLog>({
+  id: { type: String, required: true, unique: true },
+  userId: { type: String, index: true },
+  transcript: { type: String, required: true },
+  interpretedAction: { type: String, required: true },
+  target: { type: String },
+  requiresConfirm: { type: Boolean, default: false },
+  confirmToken: { type: String, index: true },
+  status: { type: String, default: 'interpreted' },
+  metadata: { type: Schema.Types.Mixed, default: {} },
+}, { timestamps: true });
+
+export const VoiceCommandLog = model<IVoiceCommandLog>('VoiceCommandLog', voiceCommandLogSchema);
+
+// 14. CourtroomSessionModel (Eliminates In-Memory Map, Durable State)
+export interface ICourtroomSession extends Document {
+  sessionId: string;
+  userId?: string;
+  topic: string;
+  userSide: 'petitioner' | 'respondent';
+  oppositionSide: 'petitioner' | 'respondent';
+  difficulty: 'easy' | 'medium' | 'hard';
+  court?: string;
+  appearanceRole?: string;
+  scenarioId?: string;
+  currentRound: number;
+  isActive: boolean;
+  isProcessing: boolean;
+  currentTurn: string;
+  messages: Array<any>;
+  verdict?: Record<string, any>;
+  score?: Record<string, any>;
+  evaluation?: Record<string, any>;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+const courtroomSessionSchema = new Schema<ICourtroomSession>({
+  sessionId: { type: String, required: true, unique: true },
+  userId: { type: String, index: true },
+  topic: { type: String, required: true },
+  userSide: { type: String, required: true },
+  oppositionSide: { type: String, required: true },
+  difficulty: { type: String, default: 'medium' },
+  court: { type: String },
+  appearanceRole: { type: String },
+  scenarioId: { type: String },
+  currentRound: { type: Number, default: 1 },
+  isActive: { type: Boolean, default: true },
+  isProcessing: { type: Boolean, default: false },
+  currentTurn: { type: String, default: 'user' },
+  messages: [{ type: Schema.Types.Mixed, default: [] }],
+  verdict: { type: Schema.Types.Mixed },
+  score: { type: Schema.Types.Mixed },
+  evaluation: { type: Schema.Types.Mixed },
+}, { timestamps: true });
+
+export const CourtroomSessionModel = model<ICourtroomSession>('CourtroomSession', courtroomSessionSchema);
+
+// 15. LegalLibraryItem (Persistent Legal Reference Library)
+export interface ILegalLibraryItem extends Document {
+  id: string;
+  itemType: 'dictionaryTerm' | 'legalForm' | 'judgment' | 'citizenGlossary' | 'studentAsset';
+  category?: string;
+  titleOrTerm: string;
+  data: Record<string, any>;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+const legalLibraryItemSchema = new Schema<ILegalLibraryItem>({
+  id: { type: String, required: true, unique: true },
+  itemType: { type: String, required: true, index: true },
+  category: { type: String, index: true },
+  titleOrTerm: { type: String, required: true },
+  data: { type: Schema.Types.Mixed, required: true },
+}, { timestamps: true });
+
+export const LegalLibraryItem = model<ILegalLibraryItem>('LegalLibraryItem', legalLibraryItemSchema);
+
+// 16. NotificationModel (User-Scoped Notification State)
+export interface INotification extends Document {
+  id: string;
+  userId?: string;
+  title: string;
+  message: string;
+  read: boolean;
+  time: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+const notificationSchema = new Schema<INotification>({
+  id: { type: String, required: true, unique: true },
+  userId: { type: String, index: true },
+  title: { type: String, required: true },
+  message: { type: String, required: true },
+  read: { type: Boolean, default: false },
+  time: { type: String, default: 'Today' },
+}, { timestamps: true });
+
+export const NotificationModel = model<INotification>('Notification', notificationSchema);
+

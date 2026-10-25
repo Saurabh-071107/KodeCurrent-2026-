@@ -350,26 +350,99 @@ ${sec.precedent}
     }
   };
 
-  const handlePromptSubmit = (e?: React.FormEvent) => {
+  const [isAnalyzingPrompt, setIsAnalyzingPrompt] = useState(false);
+
+  // Search Bare Acts from backend dynamically when search query or category changes
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      api.getBareActs(activeCategory === 'All' ? undefined : activeCategory, searchQuery.trim() || undefined)
+        .then((res) => {
+          if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+            setActsList(res.data);
+          }
+        })
+        .catch(() => {});
+    }, 250);
+
+    return () => clearTimeout(handler);
+  }, [searchQuery, activeCategory]);
+
+  const handlePromptSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const q = heroPrompt.trim();
-    if (!q) return;
+    if (!q || isAnalyzingPrompt) return;
 
-    // Search through acts
-    const matched = actsList.find(
-      (a) =>
-        a.name.toLowerCase().includes(q.toLowerCase()) ||
-        a.keySections.some((s) => s.title.toLowerCase().includes(q.toLowerCase()) || s.number.toLowerCase().includes(q.toLowerCase()))
-    );
+    setIsAnalyzingPrompt(true);
+    setToastMessage(`BAR AI: Researching statutory provisions & precedents for "${q}"...`);
 
-    if (matched) {
-      setSelectedAct(matched);
-      setToastMessage(`Found relevant provisions in ${matched.name}.`);
-    } else {
-      setSelectedAct(actsList[0] || BARE_ACTS_DATA[1]);
-      setToastMessage(`Analyzing "${q}" across statutory enactments and landmark case precedents.`);
+    try {
+      const res = await api.explainBareAct({ query: q });
+      if (res.success && res.data) {
+        const secAnalysis = res.data.sectionAnalysis;
+        const matchedActs = res.data.acts;
+
+        if (secAnalysis) {
+          const dynamicAct: BareActItem = {
+            id: `bar-ai-analysis-${Date.now()}`,
+            name: secAnalysis.statutes?.[0]?.act || (matchedActs?.[0]?.name) || `BAR AI Analysis: ${q}`,
+            category: (matchedActs?.[0]?.category) || 'Criminal',
+            year: matchedActs?.[0]?.year || 2024,
+            totalSections: `${secAnalysis.statutes?.length || 1} Relevant Provision(s)`,
+            enactedDate: matchedActs?.[0]?.enactedDate || 'In Force',
+            summary: `BAR AI statutory synthesis and judicial precedent breakdown for: "${q}".`,
+            keySections: (secAnalysis.statutes && secAnalysis.statutes.length > 0)
+              ? secAnalysis.statutes.map((st: any, idx: number) => ({
+                  number: st.section || `Provision ${idx + 1}`,
+                  title: `${st.act} ${st.section}`,
+                  plainExplanation: idx === 0 ? secAnalysis.explanation : (st.description || secAnalysis.explanation),
+                  ingredients: [
+                    `Substantive authority under ${st.act} ${st.section}`,
+                    'Mandatory procedural compliance and evidentiary burden',
+                    'Judicially recognized ingredients and statutory standards'
+                  ],
+                  precedent: secAnalysis.citations && secAnalysis.citations.length > 0
+                    ? secAnalysis.citations.map((c: any) => `${c.title} (${c.citation})`).join(' · ')
+                    : 'Landmark Supreme Court / High Court Ratios'
+                }))
+              : [
+                  {
+                    number: 'Statutory Synthesis',
+                    title: q,
+                    plainExplanation: secAnalysis.explanation || 'Statutory analysis completed.',
+                    ingredients: [
+                      'Extracted legislative elements from Indian Bare Acts',
+                      'Statutory criteria and jurisdictional requirements'
+                    ],
+                    precedent: secAnalysis.citations?.map((c: any) => `${c.title} (${c.citation})`).join(' · ') || 'Landmark Judicial Precedents'
+                  }
+                ]
+          };
+
+          setSelectedAct(dynamicAct);
+          setActiveSectionIndex(0);
+          setToastMessage(`BAR AI: Generated source-grounded breakdown for "${q}".`);
+        } else if (matchedActs && matchedActs.length > 0) {
+          setSelectedAct(matchedActs[0]);
+          setToastMessage(`Found relevant provisions in ${matchedActs[0].name}.`);
+        } else {
+          // Fallback to local match if available
+          const localMatch = actsList.find(
+            (a) =>
+              a.name.toLowerCase().includes(q.toLowerCase()) ||
+              a.keySections.some((s) => s.title.toLowerCase().includes(q.toLowerCase()) || s.number.toLowerCase().includes(q.toLowerCase()))
+          );
+          setSelectedAct(localMatch || actsList[0]);
+          setToastMessage(`Matched provisions for "${q}".`);
+        }
+      } else {
+        setToastMessage(`BAR AI was unable to retrieve statutory provision for "${q}".`);
+      }
+    } catch (err: any) {
+      setToastMessage(`BAR AI Error: ${err.message || 'Failed to analyze query.'}`);
+    } finally {
+      setIsAnalyzingPrompt(false);
+      setTimeout(() => setToastMessage(null), 5000);
     }
-    setTimeout(() => setToastMessage(null), 4000);
   };
 
   const toggleBookmark = (id: string, e: React.MouseEvent) => {

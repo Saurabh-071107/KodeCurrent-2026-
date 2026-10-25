@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useCourtroomVideoSync } from '@/hooks/useCourtroomVideoSync';
 import {
   Gavel,
   Landmark,
@@ -277,50 +278,238 @@ export default function AILiveCourtroom({
   const [activeToolModal, setActiveToolModal] = useState<string | null>(null);
   const [endSessionConfirm, setEndSessionConfirm] = useState(false);
 
+  // Dynamic Bench Evaluation & Scoring State
+  const [evalScores, setEvalScores] = useState({
+    overall: 78,
+    legalReasoning: 85,
+    authorities: 72,
+    clarity: 80,
+    responsiveness: 75,
+    demeanour: 78
+  });
+  const [strengthsList, setStrengthsList] = useState<string[]>([
+    'Strong grasp of factual matrix',
+    'Proper statutory reference under Indian procedural law'
+  ]);
+  const [improvementsList, setImprovementsList] = useState<string[]>([
+    'Cite binding High Court / Supreme Court ruling',
+    'Address recovery timeline directly'
+  ]);
+  const [benchObservation, setBenchObservation] = useState<string>(
+    'You established the factual background well and identified the key legal issues. Strengthen submissions with more binding precedents and address the bench queries with direct case facts.'
+  );
+  const [typedArgument, setTypedArgument] = useState<string>('');
+  const [isAiSubmittingTurn, setIsAiSubmittingTurn] = useState<boolean>(false);
+
+  // Active session and verdict state
+  const [currentSessionId, setCurrentSessionId] = useState<string>('');
+  const [simulatedVerdict, setSimulatedVerdict] = useState<any>(null);
+  const [isConcludingSession, setIsConcludingSession] = useState<boolean>(false);
+
+  // Video refs for the 3 courtroom actors
+  const judgeVideoRef = useRef<HTMLVideoElement>(null);
+  const petitionerVideoRef = useRef<HTMLVideoElement>(null);
+  const opposingVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Speech-Synchronized Character Video Controller
+  const {
+    activeSpeaker,
+    voiceController,
+    startSpeaking,
+    stopSpeaking,
+    pauseAll,
+    resetCourtroom
+  } = useCourtroomVideoSync({
+    judgeVideoRef,
+    opposingVideoRef,
+    petitionerVideoRef,
+    muted: isMuted
+  });
+
   // Start hearing handler
-  const handleStartHearing = () => {
+  const handleStartHearing = async () => {
     setIsConfiguring(false);
     setIsSessionActive(true);
+    setSimulatedVerdict(null);
+    resetCourtroom();
+
+    try {
+      const userSideVal = selectedRole.toLowerCase().includes('petitioner') ? 'petitioner' : 'respondent';
+      const diffVal = selectedDifficulty.toLowerCase();
+      const res = await api.startCourtroomHearing({
+        topic: `${activeScenario.title}: ${activeScenario.brief}`,
+        userSide: userSideVal as 'petitioner' | 'respondent',
+        difficulty: diffVal,
+        court: selectedCourt,
+        appearanceRole: selectedRole,
+        scenarioId: activeScenario.id,
+      });
+
+      if (res.success && res.data) {
+        const newSessionId = res.data.session?.session_id || `courtroom-session-${activeScenario.id}`;
+        setCurrentSessionId(newSessionId);
+
+        const openingMsg = res.data.turn?.message || res.data.session?.messages?.[0]?.content || activeScenario.judgeQuestion;
+        const now = new Date();
+        const timeStr = `${now.getHours() % 12 || 12}:${now.getMinutes().toString().padStart(2, '0')} ${now.getHours() >= 12 ? 'PM' : 'AM'}`;
+
+        setTranscripts([
+          {
+            id: 1,
+            sender: 'Judge',
+            time: timeStr,
+            text: openingMsg
+          }
+        ]);
+
+        // Queue Judge speech: Judge video will strictly start when audio starts, and pause when audio finishes!
+        voiceController?.enqueue({
+          speakerId: 'judge',
+          text: openingMsg
+        });
+      }
+    } catch (e: any) {
+      console.error('[Start Hearing Error]', e);
+    }
   };
 
   // Speech simulation handlers
   const handleHoldToSpeak = () => {
     setIsSpeaking(true);
+    startSpeaking('user');
   };
 
   const handleReleaseSpeak = () => {
     if (!isSpeaking) return;
     setIsSpeaking(false);
+    stopSpeaking('user');
+    executeCourtroomTurn();
+  };
+
+  const executeCourtroomTurn = async (customText?: string) => {
+    const text = (customText || typedArgument || '').trim() ||
+      `My Lord, custodial interrogation is unwarranted under ${activeScenario.actSection} as the applicant has already submitted documentary safeguards and surrendered his passport to the Investigating Officer on parity grounds.`;
+
+    setTypedArgument('');
     const newId = transcripts.length + 1;
     const now = new Date();
     const timeStr = `${now.getHours() % 12 || 12}:${now.getMinutes().toString().padStart(2, '0')} ${now.getHours() >= 12 ? 'PM' : 'AM'}`;
 
-    setTranscripts((prev) => [
-      ...prev,
-      {
-        id: newId,
-        sender: 'You',
-        time: timeStr,
-        text: 'My Lord, custodial interrogation is unwarranted as the applicant has already submitted documentary safeguards and surrendered his passport to the Investigating Officer.'
+    const userEntry = {
+      id: newId,
+      sender: 'You',
+      time: timeStr,
+      text: text
+    };
+
+    setTranscripts((prev) => [...prev, userEntry]);
+    setIsAiSubmittingTurn(true);
+    pauseAll(); // Ensure character videos are paused during AI generation
+
+    try {
+      const activeId = currentSessionId || `courtroom-session-${activeScenario.id}`;
+      // Call courtroom argument endpoint
+      const res = await api.submitCourtroomArgument(activeId, text);
+
+      if (res.success && res.data) {
+        const data = res.data;
+        const oppTurn = data.oppositionTurn;
+        const judgeTurn = data.turn;
+        const score = data.score;
+        const strengths = data.strengths;
+        const critique = data.critique;
+        const observation = data.benchObservation;
+
+        const speechQueue: Array<{ speakerId: 'opposition' | 'judge'; text: string }> = [];
+
+        // 1. Opposing Counsel rebuttal
+        if (oppTurn && oppTurn.message) {
+          const oppTime = `${new Date().getHours() % 12 || 12}:${new Date().getMinutes().toString().padStart(2, '0')} ${new Date().getHours() >= 12 ? 'PM' : 'AM'}`;
+          setTranscripts((prev) => [
+            ...prev,
+            {
+              id: prev.length + 1,
+              sender: 'Opposing Counsel',
+              time: oppTime,
+              text: oppTurn.message
+            }
+          ]);
+          speechQueue.push({ speakerId: 'opposition', text: oppTurn.message });
+        }
+
+        // 2. Judge interlocutory directive / question
+        if (judgeTurn && judgeTurn.message) {
+          const judgeTime = `${new Date().getHours() % 12 || 12}:${new Date().getMinutes().toString().padStart(2, '0')} ${new Date().getHours() >= 12 ? 'PM' : 'AM'}`;
+          setTranscripts((prev) => [
+            ...prev,
+            {
+              id: prev.length + 1,
+              sender: 'Judge',
+              time: judgeTime,
+              text: judgeTurn.message
+            }
+          ]);
+          speechQueue.push({ speakerId: 'judge', text: judgeTurn.message });
+        }
+
+        if (score) {
+          const clarity = score.clarity || 80;
+          const relevance = score.relevance || 85;
+          const accuracy = score.accuracy || 78;
+          const overall = Math.round((clarity + relevance + accuracy) / 3);
+          setEvalScores({
+            overall,
+            legalReasoning: relevance,
+            authorities: accuracy,
+            clarity: clarity,
+            responsiveness: Math.min(100, Math.round(clarity * 0.95)),
+            demeanour: 80
+          });
+        }
+
+        if (Array.isArray(strengths) && strengths.length > 0) {
+          setStrengthsList(strengths);
+        }
+        if (critique) {
+          setImprovementsList(Array.isArray(critique) ? critique : [critique]);
+        }
+        if (observation) {
+          setBenchObservation(observation);
+        }
+
+        // Speech queue initiates audio playback.
+        // Opposing video plays -> pauses -> Judge video plays -> pauses!
+        if (speechQueue.length > 0) {
+          voiceController?.enqueueSequence(speechQueue);
+        }
       }
-    ]);
+    } catch (e: any) {
+      console.error('[Courtroom Turn Error]', e.message);
+    } finally {
+      setIsAiSubmittingTurn(false);
+    }
   };
 
-  // Video refs to guarantee autoplay and mute
-  const judgeVideoRef = useRef<HTMLVideoElement>(null);
-  const petitionerVideoRef = useRef<HTMLVideoElement>(null);
-  const opposingVideoRef = useRef<HTMLVideoElement>(null);
+  // End hearing & generate Reasoned Simulated Verdict
+  const handleEndHearing = async () => {
+    setIsConcludingSession(true);
+    setEndSessionConfirm(false);
+    pauseAll();
+    voiceController?.stop();
 
-  useEffect(() => {
-    if (!isConfiguring) {
-      [judgeVideoRef, petitionerVideoRef, opposingVideoRef].forEach((ref) => {
-        if (ref.current) {
-          ref.current.muted = true;
-          ref.current.play().catch(() => {});
-        }
-      });
+    try {
+      const activeId = currentSessionId || `courtroom-session-${activeScenario.id}`;
+      const res = await api.endCourtroomHearing(activeId);
+      if (res.success && res.data) {
+        setSimulatedVerdict(res.data.session?.verdict || res.data.verdict || res.data);
+      }
+      setIsSessionActive(false);
+    } catch (e: any) {
+      console.error('[End Hearing Error]', e);
+    } finally {
+      setIsConcludingSession(false);
     }
-  }, [isConfiguring]);
+  };
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-[#FAF8F5] text-[#1E293B] font-sans antialiased">
@@ -611,17 +800,28 @@ export default function AILiveCourtroom({
                 <div className="flex flex-col gap-3">
                   
                   {/* TOP: HON'BLE AI JUDGE VIDEO FEED */}
-                  <div className="relative w-full aspect-video sm:h-[400px] xl:h-[440px] bg-[#111827] rounded-3xl overflow-hidden border border-[#DECDB8] shadow-sm">
+                  <div className={`relative w-full aspect-video sm:h-[400px] xl:h-[440px] bg-[#111827] rounded-3xl overflow-hidden border shadow-sm transition-all duration-300 ${
+                    activeSpeaker === 'judge'
+                      ? 'border-[#C59B58] ring-4 ring-[#C59B58]/30 shadow-[0_0_25px_rgba(197,155,88,0.35)]'
+                      : 'border-[#DECDB8]'
+                  }`}>
                     <video
                       ref={judgeVideoRef}
                       src="/videos/courtroom/judge.mp4"
                       poster="/videos/courtroom/judge.jpg"
-                      autoPlay
                       loop
                       muted
                       playsInline
                       className="w-full h-full object-cover"
                     />
+
+                    {/* Active Speaker Badge */}
+                    {activeSpeaker === 'judge' && (
+                      <div className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#C59B58] text-[#0F172A] font-bold text-[10px] tracking-wider uppercase animate-pulse shadow-md">
+                        <span className="w-2 h-2 rounded-full bg-[#0F172A] animate-ping"></span>
+                        <span>Hon&apos;ble Bench Speaking</span>
+                      </div>
+                    )}
 
                     {/* Floating Speech Bubble (Top Left Overlay) */}
                     {captionsEnabled && (
@@ -634,10 +834,10 @@ export default function AILiveCourtroom({
                             <span className="text-xs font-bold text-[#E2E8F0]">Hon&apos;ble Judge</span>
                           </div>
                           <div className="flex items-center gap-0.5">
-                            <span className="w-1 h-3 bg-cyan-400 rounded-full animate-pulse"></span>
-                            <span className="w-1 h-4 bg-cyan-400 rounded-full animate-pulse delay-75"></span>
-                            <span className="w-1 h-2 bg-cyan-400 rounded-full animate-pulse delay-150"></span>
-                            <span className="w-1 h-5 bg-cyan-400 rounded-full animate-pulse"></span>
+                            <span className={`w-1 h-3 rounded-full ${activeSpeaker === 'judge' ? 'bg-amber-400 animate-pulse' : 'bg-cyan-400/50'}`}></span>
+                            <span className={`w-1 h-4 rounded-full ${activeSpeaker === 'judge' ? 'bg-amber-400 animate-pulse delay-75' : 'bg-cyan-400/50'}`}></span>
+                            <span className={`w-1 h-2 rounded-full ${activeSpeaker === 'judge' ? 'bg-amber-400 animate-pulse delay-150' : 'bg-cyan-400/50'}`}></span>
+                            <span className={`w-1 h-5 rounded-full ${activeSpeaker === 'judge' ? 'bg-amber-400 animate-pulse' : 'bg-cyan-400/50'}`}></span>
                           </div>
                         </div>
                         <p className="text-xs text-white/95 leading-relaxed font-sans">
@@ -682,7 +882,11 @@ export default function AILiveCourtroom({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     
                     {/* Petitioner / "You" */}
-                    <div className="relative aspect-video sm:h-[190px] xl:h-[210px] bg-[#111827] rounded-2xl overflow-hidden border border-[#DECDB8] shadow-sm">
+                    <div className={`relative aspect-video sm:h-[190px] xl:h-[210px] bg-[#111827] rounded-2xl overflow-hidden border shadow-sm transition-all duration-300 ${
+                      activeSpeaker === 'user' || isSpeaking
+                        ? 'border-[#1E3A8A] ring-4 ring-[#1E3A8A]/30 shadow-[0_0_20px_rgba(30,58,138,0.35)]'
+                        : 'border-[#DECDB8]'
+                    }`}>
                       {isVideoOff ? (
                         <div className="w-full h-full flex flex-col items-center justify-center bg-[#1E293B] text-white/70">
                           <VideoOff className="w-8 h-8 text-[#94A3B8] mb-1" />
@@ -693,12 +897,18 @@ export default function AILiveCourtroom({
                           ref={petitionerVideoRef}
                           src="/videos/courtroom/petitioner.mp4"
                           poster="/videos/courtroom/petitioner.jpg"
-                          autoPlay
                           loop
                           muted
                           playsInline
                           className="w-full h-full object-cover"
                         />
+                      )}
+
+                      {(activeSpeaker === 'user' || isSpeaking) && (
+                        <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#1E3A8A] text-white font-bold text-[9px] uppercase tracking-wider animate-pulse shadow-md">
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+                          <span>Advocate Speaking</span>
+                        </div>
                       )}
 
                       <div className="absolute bottom-3 left-3 flex items-center gap-2 px-2.5 py-1 rounded-full bg-black/65 backdrop-blur-md border border-white/15 text-white">
@@ -719,17 +929,27 @@ export default function AILiveCourtroom({
                     </div>
 
                     {/* Opposing Counsel */}
-                    <div className="relative aspect-video sm:h-[190px] xl:h-[210px] bg-[#111827] rounded-2xl overflow-hidden border border-[#DECDB8] shadow-sm">
+                    <div className={`relative aspect-video sm:h-[190px] xl:h-[210px] bg-[#111827] rounded-2xl overflow-hidden border shadow-sm transition-all duration-300 ${
+                      activeSpeaker === 'opposition'
+                        ? 'border-[#8C5320] ring-4 ring-[#8C5320]/30 shadow-[0_0_20px_rgba(140,83,32,0.35)]'
+                        : 'border-[#DECDB8]'
+                    }`}>
                       <video
                         ref={opposingVideoRef}
                         src="/videos/courtroom/opposing.mp4"
                         poster="/videos/courtroom/opposing.jpg"
-                        autoPlay
                         loop
                         muted
                         playsInline
                         className="w-full h-full object-cover"
                       />
+
+                      {activeSpeaker === 'opposition' && (
+                        <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#8C5320] text-white font-bold text-[9px] uppercase tracking-wider animate-pulse shadow-md">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-ping"></span>
+                          <span>Opposing Counsel Speaking</span>
+                        </div>
+                      )}
 
                       <div className="absolute bottom-3 left-3 flex items-center gap-2 px-2.5 py-1 rounded-full bg-black/65 backdrop-blur-md border border-white/15 text-white">
                         <div className="w-4 h-4 rounded-full bg-[#8C5320] flex items-center justify-center text-white">
@@ -867,6 +1087,34 @@ export default function AILiveCourtroom({
                     </div>
                   )}
                 </div>
+
+                {/* Interactive Argument Bar */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (typedArgument.trim()) {
+                      executeCourtroomTurn(typedArgument.trim());
+                    }
+                  }}
+                  className="bg-white border border-[#DECDB8] rounded-2xl p-2 sm:p-2.5 shadow-xs flex items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    value={typedArgument}
+                    onChange={(e) => setTypedArgument(e.target.value)}
+                    placeholder="Type oral argument for the Bench or hold the speak button..."
+                    disabled={isAiSubmittingTurn}
+                    className="flex-1 bg-transparent px-2 text-xs sm:text-sm text-[#1E293B] placeholder-[#94A3B8] focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isAiSubmittingTurn || !typedArgument.trim()}
+                    className="px-3.5 py-1.5 rounded-xl bg-[#1E3A8A] text-white text-xs font-semibold hover:bg-[#1E3A8A]/90 disabled:opacity-50 transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>{isAiSubmittingTurn ? 'Bench Considering...' : 'Submit Argument'}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </form>
 
                 {/* BOTTOM: COMFORTABLE CONTROL BAR */}
                 <div className="bg-white border border-[#DECDB8] rounded-2xl p-3 sm:px-6 shadow-sm flex flex-wrap items-center justify-between gap-3">
@@ -1109,7 +1357,7 @@ export default function AILiveCourtroom({
                             />
                             <path
                               className="text-teal-600 transition-all duration-1000 ease-out"
-                              strokeDasharray="78, 100"
+                              strokeDasharray={`${evalScores.overall}, 100`}
                               strokeWidth="3.5"
                               strokeLinecap="round"
                               stroke="currentColor"
@@ -1118,7 +1366,7 @@ export default function AILiveCourtroom({
                             />
                           </svg>
                           <div className="absolute flex flex-col items-center">
-                            <span className="font-bold text-xl text-[#0F172A] leading-none">78</span>
+                            <span className="font-bold text-xl text-[#0F172A] leading-none">{evalScores.overall}</span>
                             <span className="text-[8px] font-bold text-[#64748B] uppercase mt-0.5">Overall</span>
                           </div>
                         </div>
@@ -1126,11 +1374,11 @@ export default function AILiveCourtroom({
 
                       <div className="col-span-8 space-y-1.5 text-xs">
                         {[
-                          { label: 'Legal Reasoning', score: 85, color: 'bg-emerald-500' },
-                          { label: 'Use of Authorities', score: 72, color: 'bg-amber-500' },
-                          { label: 'Clarity of Arguments', score: 80, color: 'bg-emerald-500' },
-                          { label: 'Responsiveness', score: 75, color: 'bg-amber-500' },
-                          { label: 'Courtroom Demeanour', score: 78, color: 'bg-emerald-500' },
+                          { label: 'Legal Reasoning', score: evalScores.legalReasoning, color: 'bg-emerald-500' },
+                          { label: 'Use of Authorities', score: evalScores.authorities, color: 'bg-amber-500' },
+                          { label: 'Clarity of Arguments', score: evalScores.clarity, color: 'bg-emerald-500' },
+                          { label: 'Responsiveness', score: evalScores.responsiveness, color: 'bg-amber-500' },
+                          { label: 'Courtroom Demeanour', score: evalScores.demeanour, color: 'bg-emerald-500' },
                         ].map((bar) => (
                           <div key={bar.label} className="space-y-0.5">
                             <div className="flex items-center justify-between text-[11px]">
@@ -1139,7 +1387,7 @@ export default function AILiveCourtroom({
                             </div>
                             <div className="w-full h-1.5 bg-[#E2E8F0] rounded-full overflow-hidden">
                               <div
-                                className={`h-full ${bar.color} rounded-full`}
+                                className={`h-full ${bar.color} rounded-full transition-all duration-500`}
                                 style={{ width: `${bar.score}%` }}
                               ></div>
                             </div>
@@ -1156,14 +1404,12 @@ export default function AILiveCourtroom({
                           <span>Key Strengths</span>
                         </div>
                         <ul className="text-[11px] space-y-1 text-emerald-900 leading-tight">
-                          <li className="flex items-start gap-1">
-                            <span className="text-emerald-600 font-bold">✓</span>
-                            <span>Strong grasp of factual matrix</span>
-                          </li>
-                          <li className="flex items-start gap-1">
-                            <span className="text-emerald-600 font-bold">✓</span>
-                            <span>Proper reference to Section 438</span>
-                          </li>
+                          {strengthsList.map((str, idx) => (
+                            <li key={idx} className="flex items-start gap-1">
+                              <span className="text-emerald-600 font-bold">✓</span>
+                              <span>{str}</span>
+                            </li>
+                          ))}
                         </ul>
                       </div>
 
@@ -1173,14 +1419,12 @@ export default function AILiveCourtroom({
                           <span>Areas to Improve</span>
                         </div>
                         <ul className="text-[11px] space-y-1 text-rose-900 leading-tight">
-                          <li className="flex items-start gap-1">
-                            <span className="text-rose-600 font-bold font-mono">!</span>
-                            <span>Cite binding High Court ruling</span>
-                          </li>
-                          <li className="flex items-start gap-1">
-                            <span className="text-rose-600 font-bold font-mono">!</span>
-                            <span>Concede recovery timeline earlier</span>
-                          </li>
+                          {improvementsList.map((imp, idx) => (
+                            <li key={idx} className="flex items-start gap-1">
+                              <span className="text-rose-600 font-bold font-mono">!</span>
+                              <span>{imp}</span>
+                            </li>
+                          ))}
                         </ul>
                       </div>
                     </div>
@@ -1189,7 +1433,7 @@ export default function AILiveCourtroom({
                     <div className="p-3.5 bg-[#FAF8F5] border border-[#DECDB8] rounded-xl text-xs text-[#334155] leading-relaxed">
                       <strong className="text-[#1E293B] block text-[11px] mb-1">Bench Observation:</strong>
                       <p className="text-[11px] text-[#475569]">
-                        &ldquo;You established the factual background well and identified the key legal issues. Strengthen submissions with more binding precedents and address the bench queries with direct case facts.&rdquo;
+                        &ldquo;{benchObservation}&rdquo;
                       </p>
                     </div>
 
@@ -1323,7 +1567,7 @@ export default function AILiveCourtroom({
             <div>
               <h3 className="font-bold text-lg text-[#1E293B]">End Courtroom Session?</h3>
               <p className="text-xs text-[#64748B] mt-1">
-                Your performance score of <strong>78/100</strong> and oral transcript will be saved to your Student Profile.
+                The Bench will adjourn the hearing, evaluate the oral transcript, and render a reasoned simulated verdict.
               </p>
             </div>
             <div className="flex items-center gap-3 justify-center pt-2">
@@ -1334,13 +1578,114 @@ export default function AILiveCourtroom({
               >
                 Resume Hearing
               </button>
+              <button
+                type="button"
+                disabled={isConcludingSession}
+                onClick={handleEndHearing}
+                className="px-5 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 transition cursor-pointer disabled:opacity-50"
+              >
+                {isConcludingSession ? 'Generating Verdict...' : 'Adjourn & Get Verdict'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* 4. REASONED SIMULATED VERDICT MODAL (COURTROOM.AI INTEGRATION)        */}
+      {/* ===================================================================== */}
+      {simulatedVerdict && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-[#DECDB8] rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-200 my-8">
+            
+            {/* Header */}
+            <div className="text-center space-y-2 pb-4 border-b border-[#EAE3D6]">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF5EB] border border-[#DECDB8] text-xs font-bold text-[#8C5320] uppercase tracking-wider">
+                <Gavel className="w-3.5 h-3.5" />
+                <span>Simulated Judicial Verdict</span>
+              </div>
+              <h2 className="font-serif font-bold text-2xl sm:text-3xl text-[#1E3A8A]">
+                {simulatedVerdict.simulated_outcome || 'Hearing Concluded'}
+              </h2>
+              <p className="text-xs text-[#64748B]">
+                {simulatedVerdict.topic_summary || activeScenario.title}
+              </p>
+            </div>
+
+            {/* Scorecard Summary Pill */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+              <div className="p-3 rounded-2xl bg-[#FAF8F5] border border-[#DECDB8]">
+                <span className="text-[10px] uppercase font-bold text-[#64748B] block">Overall Score</span>
+                <strong className="text-xl font-mono text-[#1E3A8A] font-bold">{evalScores.overall}/100</strong>
+              </div>
+              <div className="p-3 rounded-2xl bg-[#FAF8F5] border border-[#DECDB8]">
+                <span className="text-[10px] uppercase font-bold text-[#64748B] block">Legal Reasoning</span>
+                <strong className="text-xl font-mono text-[#8C5320] font-bold">{evalScores.legalReasoning}%</strong>
+              </div>
+              <div className="p-3 rounded-2xl bg-[#FAF8F5] border border-[#DECDB8]">
+                <span className="text-[10px] uppercase font-bold text-[#64748B] block">Authorities</span>
+                <strong className="text-xl font-mono text-[#1E293B] font-bold">{evalScores.authorities}%</strong>
+              </div>
+              <div className="p-3 rounded-2xl bg-[#FAF8F5] border border-[#DECDB8]">
+                <span className="text-[10px] uppercase font-bold text-[#64748B] block">Demeanour</span>
+                <strong className="text-xl font-mono text-emerald-700 font-bold">{evalScores.demeanour}%</strong>
+              </div>
+            </div>
+
+            {/* Judicial Reasoning */}
+            <div className="space-y-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#1E293B] flex items-center gap-1.5">
+                <Scale className="w-4 h-4 text-[#C59B58]" />
+                <span>Judicial Reasoning & Ratio</span>
+              </span>
+              <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#DECDB8] text-xs text-[#334155] leading-relaxed">
+                {simulatedVerdict.judicial_reasoning || 'The Bench evaluated the oral submissions on maintainability, statutory conditions precedent, and evidentiary thresholds.'}
+              </div>
+            </div>
+
+            {/* Advocacy Feedback Points */}
+            {Array.isArray(simulatedVerdict.advocacy_feedback_for_user) && simulatedVerdict.advocacy_feedback_for_user.length > 0 && (
+              <div className="space-y-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#1E293B] flex items-center gap-1.5">
+                  <Brain className="w-4 h-4 text-[#1E3A8A]" />
+                  <span>Bench Recommendations for Improvement</span>
+                </span>
+                <ul className="space-y-1.5 text-xs text-[#475569]">
+                  {simulatedVerdict.advocacy_feedback_for_user.map((fb: string, i: number) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                      <span>{fb}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Disclaimer */}
+            <div className="p-2.5 rounded-xl bg-[#FAF5EB] border border-[#DECDB8] text-[10px] text-center text-[#8C5320] font-medium">
+              {simulatedVerdict.disclaimer || 'SIMULATED EDUCATIONAL VERDICT — FOR MOOT COURT TRAINING PURPOSES ONLY.'}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4 border-t border-[#EAE3D6]">
+              <button
+                type="button"
+                onClick={() => {
+                  setSimulatedVerdict(null);
+                  setIsConfiguring(true);
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-[#DECDB8] bg-[#FAF8F5] text-xs font-bold text-[#1E293B] hover:bg-[#EAE3D6] transition cursor-pointer"
+              >
+                Start New Chamber Hearing
+              </button>
               <Link
                 href={dashboardHref}
-                className="px-5 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 transition cursor-pointer"
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#1E3A8A] text-white text-xs font-bold hover:bg-[#172554] shadow-md transition text-center"
               >
-                Confirm & Exit
+                Save & Return to Student Centre
               </Link>
             </div>
+
           </div>
         </div>
       )}

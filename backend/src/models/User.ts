@@ -17,6 +17,14 @@ export interface IOnboardingData {
   completedAt?: Date;
 }
 
+export interface ITtsPreferences {
+  voice?: string;
+  rate?: number;
+  pitch?: number;
+  preferredLanguage?: string;
+  autoScrollHighlight?: boolean;
+}
+
 export interface IUser extends Document {
   mobile: string;
   name: string;
@@ -24,6 +32,7 @@ export interface IUser extends Document {
   role: string;
   isVerified: boolean;
   onboarding?: IOnboardingData;
+  ttsPreferences?: ITtsPreferences;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -71,6 +80,13 @@ const userSchema = new Schema<IUser>(
       industry: { type: String },
       completedAt: { type: Date },
     },
+    ttsPreferences: {
+      voice: { type: String, default: '' },
+      rate: { type: Number, default: 1.0 },
+      pitch: { type: Number, default: 1.0 },
+      preferredLanguage: { type: String, default: 'en-IN' },
+      autoScrollHighlight: { type: Boolean, default: true },
+    },
   },
   {
     timestamps: true,
@@ -90,3 +106,4 @@ userSchema.methods.comparePassword = async function (candidatePassword: string):
 };
 
 export const User = model<IUser>('User', userSchema);
+export default User;

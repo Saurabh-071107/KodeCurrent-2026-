@@ -793,6 +793,41 @@ export default function LegalLibrary({
       </div>
 
       {/* =================================================================== */}
+      {/* 2. LEGAL MODULES NAVIGATION TABS (Connected to all 4 sub-modules)   */}
+      {/* =================================================================== */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-[#EAE3D6] pt-1">
+        {[
+          { id: 'bare-acts', label: 'Bare Acts & Statutes', icon: BookOpen, count: bareActsList.length, color: 'text-[#C59B58]' },
+          { id: 'dictionary', label: 'Legal Dictionary & Maxims', icon: Scale, count: dictionaryList.length, color: 'text-[#1E3A8A]' },
+          { id: 'forms', label: 'Legal Forms & Pleadings', icon: FileText, count: formsList.length, color: 'text-[#8C5320]' },
+          { id: 'judgments', label: 'Judgment Library', icon: Gavel, count: judgmentsList.length, color: 'text-emerald-700' },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <Link
+              key={tab.id}
+              href={`${baseRoute}/${tab.id}`}
+              onClick={() => setActiveTab(tab.id as LibraryTab)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                isActive
+                  ? 'bg-[#1E3A8A] text-white shadow-xs'
+                  : 'bg-white border border-[#EAE3D6] text-[#64748B] hover:text-[#1E293B] hover:bg-[#FAF8F5]'
+              }`}
+            >
+              <Icon className={`w-4 h-4 ${isActive ? 'text-white' : tab.color}`} />
+              <span>{tab.label}</span>
+              <span className={`text-[11px] px-2 py-0.5 rounded-full font-sans font-bold ${
+                isActive ? 'bg-white/20 text-white' : 'bg-[#FAF5EB] text-[#8C5320]'
+              }`}>
+                {tab.count}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* =================================================================== */}
       {/* TAB 1: BARE ACTS REPOSITORY                                         */}
       {/* =================================================================== */}
       {activeTab === 'bare-acts' && (

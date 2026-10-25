@@ -1,8 +1,24 @@
 import { Response } from 'express';
 import crypto from 'crypto';
-import { Template, Draft, CaseModel, Client, BareAct, DocumentRecord } from '../models/AppModels';
+import { 
+  Template, 
+  Draft, 
+  CaseModel, 
+  Client, 
+  BareAct, 
+  DocumentRecord, 
+  ResearchThread,
+  ReferenceStyleProfile,
+  CitationVerificationRecord,
+  VoiceCommandLog,
+  LegalLibraryItem,
+  NotificationModel
+} from '../models/AppModels';
+import { User } from '../models/User';
 import { aiClient } from '../services/aiClient';
-import { translateDocumentClauses } from '../services/translator';
+import { aiOrchestrator } from '../services/aiOrchestrator.service';
+import { courtroomService } from '../services/courtroom.service';
+import { translateDocumentClauses, translateDocumentClausesAsync } from '../services/translator';
 import { AppRequest } from '../middleware/requestId.middleware';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 
@@ -93,28 +109,45 @@ export const getDashboardStats = async (req: AuthenticatedRequest, res: Response
 };
 
 export const getNotifications = async (req: AuthenticatedRequest, res: Response) => {
-  res.json({
-    success: true,
-    data: [
-      {
-        id: 'notif-1',
-        title: 'Cause List Notification',
-        message: 'Your listed matters have been synchronized with court cause lists.',
-        time: 'Today',
-        read: false
-      }
-    ],
-    requestId: (req as AppRequest).id
-  });
+  try {
+    const userId = req.user?._id?.toString();
+    const filter = userId ? { $or: [{ userId }, { userId: { $exists: false } }] } : {};
+    const notifs = await NotificationModel.find(filter).sort({ createdAt: -1 }).limit(20);
+
+    res.json({
+      success: true,
+      data: notifs,
+      requestId: (req as AppRequest).id
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'NOTIF_ERROR', message: 'Failed to retrieve notifications.' },
+      requestId: (req as AppRequest).id
+    });
+  }
 };
 
 export const markNotificationRead = async (req: AuthenticatedRequest, res: Response) => {
-  const { id } = req.params;
-  res.json({
-    success: true,
-    data: { id, read: true },
-    requestId: (req as AppRequest).id
-  });
+  try {
+    const { id } = req.params;
+    const notif = await NotificationModel.findOneAndUpdate(
+      { id },
+      { read: true },
+      { new: true }
+    );
+    res.json({
+      success: true,
+      data: notif || { id, read: true },
+      requestId: (req as AppRequest).id
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'NOTIF_UPDATE_ERROR', message: 'Failed to mark notification as read.' },
+      requestId: (req as AppRequest).id
+    });
+  }
 };
 
 // -------------------------------------------------------------
@@ -284,207 +317,105 @@ export const preCheckDraft = async (req: AuthenticatedRequest, res: Response) =>
   }
 };
 
-function buildSynthesizedLegalDraft(documentType?: string, facts?: any, customInstructions?: string, templateId?: string) {
-  const instr = ((customInstructions || '') + ' ' + (facts?.objective || '') + ' ' + (documentType || '')).toLowerCase();
-  const tmpl = (templateId || '').toLowerCase();
-  const factsStr = JSON.stringify(facts || {}).toLowerCase();
-
-  const isPriceHike = instr.includes('hike') || instr.includes('hick') || instr.includes('price') || instr.includes('escalat') || instr.includes('increase rent') || instr.includes('illegal rent') || (instr.includes('complaint') && (instr.includes('landlord') || instr.includes('rent')));
-  const isParkOrEnvironment = instr.includes('park') || factsStr.includes('park') || instr.includes('environment') || instr.includes('green') || instr.includes('encroachment');
-  const isMoot = tmpl.includes('moot') || instr.includes('moot') || instr.includes('memorial') || facts?.mootTitle || facts?.teamCode;
-  const isRent = tmpl.includes('rent') || facts?.address || facts?.amount || instr.includes('rent') || instr.includes('tenant');
-  const isDeposit = tmpl.includes('deposit') || instr.includes('deposit') || facts?.landlord;
-
-  if (isPriceHike) {
-    const landlord = facts?.landlord || 'The Landlord / Property Owner';
-    const address = facts?.address || facts?.flat || 'the rented premises';
-    return {
-      title: 'Notice & Objection — Arbitrary Rent Increase by Landlord',
-      heading: 'FORMAL LEGAL NOTICE & OBJECTION AGAINST UNLAWFUL RENT HIKE',
-      toPlaceholder: `${landlord}\nProperty Owner / Lessor`,
-      subject: 'Formal Objection and Demand to Rescind Arbitrary and Unilateral Rent Increase in Violation of Tenancy Agreement and Rent Regulations',
-      bodyClauses: [
-        `1. That the undersigned is a lawful, bona fide tenant occupying the premises situated at ${address} under a valid and subsisting Tenancy/Lease Agreement, with monthly rent mutually fixed at the agreed rate.`,
-        `2. That your recent demand intimating an arbitrary price hike / rent escalation during the ongoing tenancy period is completely unilateral, unconscionable, and in direct contravention of the terms of the agreement and statutory rent control regulations.`,
-        `3. That under the Model Tenancy Act and state rent control principles, a landlord cannot unilaterally hike rent or threaten eviction without complying with statutory notice periods and contracted escalation caps.`,
-        `4. That the tenant has consistently paid the contracted monthly rent on time without default, and any threat of dispossession, disturbance of peaceful possession, or disconnection of essential utilities (water, electricity) is strictly illegal and actionable under civil and criminal law.`
-      ],
-      ultimatum: 'TAKE NOTICE that you are hereby called upon to withdraw the arbitrary rent hike demand within 7 (Seven) days of receipt of this notice and continue accepting the lawfully contracted rent, failing which the undersigned will initiate civil injunction proceedings before the Competent Civil Court and lodge a complaint before the Rent Authority at your risk and cost.',
-      signOffTitle: 'Yours faithfully,\n[Tenant Name]\nLawful Tenant in Peaceful Occupation'
-    };
-  }
-
-  const isPowerDisconnection = instr.includes('power') || instr.includes('electric') || instr.includes('blackout') || instr.includes('disconnection') || instr.includes('utility');
-  if (isPowerDisconnection) {
-    const recipient = facts?.recipient || facts?.landlord || 'The Opposite Party / Harish Hirani';
-    const address = facts?.address || facts?.flat || 'the demised premises';
-    return {
-      title: 'Legal Notice — Unlawful Disconnection of Electricity Supply',
-      heading: 'FORMAL LEGAL NOTICE & DEMAND FOR IMMEDIATE RESTORATION OF ELECTRICITY',
-      toPlaceholder: `${recipient}\nResponsible Entity / Landlord`,
-      subject: 'Urgent Legal Notice under Section 19 Model Tenancy Act / Section 108 Transfer of Property Act for Unlawful and Malicious Disconnection of Electricity Supply',
-      bodyClauses: [
-        `1. That the Claimant is in lawful physical occupation of the premises situated at ${address}, having punctually remitted all monthly dues and power charges without any default.`,
-        `2. That you have unlawfully, arbitrarily, and without color of right disconnected or caused the disruption of electric power supply to the Claimant's premises, causing acute hardship, mental agony, and health hazards.`,
-        `3. That under Section 19 of the Model Tenancy Act, 2021 and settled constitutional precedents, no person or authority has the license to withhold or curtail essential supplies (including water and electricity) under any circumstance.`,
-        `4. That such coercive deprivation constitutes deliberate tortious harassment, actionable trespass, and criminal endangerment under Sections 324 and 351 of Bharatiya Nyaya Sanhita, 2023.`
-      ],
-      ultimatum: 'TAKE NOTICE that you are hereby called upon to restore full and uninterrupted electric power supply to the said premises within 24 (Twenty-Four) hours of receipt of this notice, failing which the Claimant shall approach the Competent Court for an urgent mandatory interim injunction under Section 151 CPC and lodge a criminal complaint at your sole risk and peril.',
-      signOffTitle: 'Yours faithfully,\n[Complainant Name]\nLawful Occupant in Possession'
-    };
-  }
-
-  if (isParkOrEnvironment) {
-    return {
-      title: 'Public Interest Litigation — Protection & Restoration of Public Park',
-      heading: 'IN THE HON’BLE HIGH COURT OF JUDICATURE\n(ORIGINAL WRIT JURISDICTION — PUBLIC INTEREST LITIGATION)',
-      toPlaceholder: 'THE HON’BLE CHIEF JUSTICE AND COMPANION JUSTICES OF THE HON’BLE HIGH COURT',
-      subject: 'WRIT PETITION UNDER ARTICLE 226 OF THE CONSTITUTION OF INDIA SEEKING REMOVAL OF ENCROACHMENTS AND PRESERVATION OF PUBLIC RECREATIONAL PARK LAND',
-      bodyClauses: [
-        'STATEMENT OF JURISDICTION: The Petitioner, an aggrieved resident and citizen, invokes the extraordinary writ jurisdiction of this Hon’ble Court under Article 226 of the Constitution of India in public interest for the preservation, maintenance, and ecological restoration of municipal public park space.',
-        'STATEMENT OF FACTS: That the demarcated public park situated within the municipal zone, reserved exclusively for recreational and environmental purposes under the Master Development Plan, has been subjected to illegal commercial encroachment, debris dumping, and systemic municipal neglect.',
-        'LEGAL GROUNDS — PUBLIC TRUST DOCTRINE: That in Bangalore Medical Trust v. B.S. Muddappa (1991) 4 SCC 54 and M.C. Mehta v. Kamal Nath (1997) 1 SCC 388, the Hon’ble Supreme Court firmly held that open public spaces and parks are held by public authorities in solemn trust for the public and cannot be alienated, encroached, or diverted for non-park uses.',
-        'VIOLATION OF FUNDAMENTAL RIGHTS: That deprivation and degradation of designated green lung areas violates the Right to a Clean, Wholesome Environment and Healthy Living guaranteed as a core facet of the Right to Life under Article 21 of the Constitution.',
-        'REPRESENTATIONS UNHEEDED: That despite multiple detailed written representations submitted to the Municipal Commissioner and Development Authority, no anti-encroachment or sanitization drives have been initiated.'
-      ],
-      ultimatum: 'PRAYER: Wherefore, in the light of the above facts, the Petitioner respectfully prays that this Hon’ble Court be pleased to issue a Writ of Mandamus or other appropriate direction directing the Respondent Authorities to immediately remove all illegal encroachments, restore the green canopy and boundary fences of the public park, and institute routine judicial compliance monitoring.',
-      signOffTitle: 'Respectfully Submitted,\nCounsel for the Petitioner\nAdvocate in Public Interest'
-    };
-  }
-
-  if (isMoot) {
-    const mootName = facts?.mootTitle || 'National Constitutional Moot Court Competition';
-    const caseName = facts?.caseTitle || 'Union of People v. Republic of Indica';
-    const court = facts?.courtName || 'Supreme Court of Indica';
-    const teamCode = facts?.teamCode || 'TC-42';
-
-    return {
-      title: `Memorial for Petitioner — ${caseName}`,
-      heading: 'MEMORIAL FOR THE PETITIONER',
-      toPlaceholder: `IN THE HON’BLE ${court.toUpperCase()}`,
-      subject: `Pleadings on behalf of the Petitioner in ${caseName} under Article 32 of Constitution`,
-      bodyClauses: [
-        `STATEMENT OF JURISDICTION: The Petitioner approaches this Hon’ble Court under Article 32 of the Constitution challenging arbitrary state actions arising out of the factual record in ${mootName}.`,
-        `STATEMENT OF FACTS: Arising out of "${caseName}", the Government enacted executive protocols compelling pervasive biometric telemetry and surveillance without prior judicial warrant or statutory backing.`,
-        `ARGUMENT ADVANCED — ISSUE 1: The impugned circular fails the four-pronged proportionality test laid down in K.S. Puttaswamy (Privacy 9J) v. Union of India and Modern Dental College, lacking legitimate state aim and necessity.`,
-        `ARGUMENT ADVANCED — ISSUE 2: The executive regulations infringe procedural fairness and natural justice under Articles 14 and 21, being manifestly arbitrary and lacking independent oversight.`
-      ],
-      ultimatum: `PRAYER: Wherefore, in the light of the facts stated and authorities cited, the Petitioner (Team [${teamCode}]) respectfully prays that this Hon’ble Court declare the impugned regulations ultra vires Articles 14, 19, and 21 of the Constitution and quash all resulting actions.`,
-      signOffTitle: `Respectfully Submitted,\nCounsels for the Petitioner (Team [${teamCode}])`
-    };
-  }
-
-  if (isRent) {
-    const recipient = facts?.recipient || 'The Tenant';
-    const address = facts?.address || 'the demised premises';
-    const amount = facts?.amount ? `₹ ${facts.amount}/-` : '₹ [Amount]/-';
-    const date = facts?.date || '[Agreement Date]';
-
-    return {
-      title: 'Legal Notice — Default in Rent Payment',
-      heading: 'LEGAL NOTICE',
-      toPlaceholder: `${recipient}\nResiding at: ${address}`,
-      subject: `Demand Notice under Section 106 of the Transfer of Property Act, 1882 for recovery of ${amount}`,
-      bodyClauses: [
-        `1. That my client is the absolute lawful owner of the residential premises bearing ${address}.`,
-        `2. That you entered into lawful occupation as a tenant under a lease agreement dated ${date}, agreeing to remit monthly rentals punctually.`,
-        `3. That in breach of contractual obligations, you have defaulted on monthly rent, accumulating total outstanding arrears of ${amount} despite repeated requests.`,
-        `4. That your continuing non-payment constitutes deliberate breach of contract causing severe financial distress to my client.`
-      ],
-      ultimatum: `You are hereby called upon to pay the entire outstanding arrears of ${amount} within 15 (Fifteen) days from the receipt of this notice, failing which my client shall initiate summary eviction and civil recovery proceedings against you at your risk and cost.`,
-      signOffTitle: 'Yours faithfully,\n[Advocate Name]\nCounsel for the Landlord'
-    };
-  }
-
-  if (isDeposit) {
-    const landlord = facts?.landlord || 'The Landlord';
-    const flat = facts?.flat || 'the rented premises';
-    const deposit = facts?.depositAmount ? `₹ ${facts.depositAmount}/-` : '₹ 75,000/-';
-
-    return {
-      title: 'Notice for Refund of Security Deposit',
-      heading: 'FORMAL NOTICE FOR RETURN OF SECURITY DEPOSIT',
-      toPlaceholder: `${landlord}\nProperty Owner`,
-      subject: `Urgent demand for immediate refund of withheld security deposit amounting to ${deposit}`,
-      bodyClauses: [
-        `1. That I was the bona fide tenant of your flat situated at ${flat}, having peacefully vacated and handed over vacant possession on ${facts?.vacateDate || 'the agreed date'}.`,
-        `2. That all utility dues, maintenance charges, and rental arrears were completely settled with zero outstanding liabilities.`,
-        `3. That despite joint physical inspection, the interest-free security deposit of ${deposit} has been unlawfully withheld by you without any legitimate cause.`
-      ],
-      ultimatum: `I hereby demand that you remit the complete deposit amount of ${deposit} within 7 days, failing which I shall initiate civil recovery and consumer complaint proceedings before the Consumer Disputes Redressal Commission.`,
-      signOffTitle: 'Yours faithfully,\n[Tenant Name]\nFormer Tenant & Verified Citizen'
-    };
-  }
-
-  // Dynamic default
-  const topic = customInstructions || facts?.objective || documentType || 'Legal Notice';
-  return {
-    title: `${topic.slice(0, 40).toUpperCase()} — Draft`,
-    heading: 'LEGAL NOTICE & STATUTORY DEMAND',
-    toPlaceholder: 'TO WHOMSOEVER IT MAY CONCERN',
-    subject: `Notice of Demand and Formal Legal Pleading regarding ${topic}`,
-    bodyClauses: [
-      `1. That the Claimant hereby places on record the material facts and statutory grounds concerning ${topic}.`,
-      `2. That all applicable procedural safeguards under the laws of India have been duly observed, and the Respondent's actions constitute a direct infraction of protected statutory rights.`,
-      `3. That the Claimant reserves all rights to substantiate these pleadings with relevant evidentiary authorities before the competent judicial forum.`
-    ],
-    ultimatum: 'TAKE NOTICE that failure to remedy the breach within 15 days shall necessitate immediate formal legal proceedings.',
-    signOffTitle: 'Respectfully Submitted,\nAdvocate for the Claimant'
-  };
-}
 
 export const generateDraft = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?._id?.toString();
-    const { documentType, facts, templateId, customInstructions, jurisdiction } = req.body;
-    let sections: any[] = [];
+    const { documentType, facts, templateId, customInstructions, jurisdiction, referenceStyle, existingClauses, skillName } = req.body;
+
     let generatedClauses: string[] = [];
-    let warnings: string[] = [];
+    let title = `${(documentType || 'Legal Document').toUpperCase()} — Draft`;
+    let heading = title;
+    let subject = `Formal Legal Draft regarding ${documentType || 'Legal Matter'}`;
+    let toPlaceholder = 'TO WHOMSOEVER IT MAY CONCERN';
+    let ultimatum = 'TAKE NOTICE that strict compliance with the statutory provisions set out herein is required.';
+    let signOffTitle = 'Respectfully Submitted,\nAdvocate for the Claimant';
+    let reviewStatus = 'draft_needs_review';
+    let styleApplied = Boolean(referenceStyle);
 
-    // Fallback synthesizer in case upstream AI service is offline or unconfigured
-    const synthesized = buildSynthesizedLegalDraft(documentType, facts, customInstructions, templateId);
-
+    // 1. Attempt generation via AI client (draftmate-ai FastAPI)
+    let aiResult: any;
     try {
-      const aiResult = await aiClient.generateDraft({
+      aiResult = await aiClient.generateDraft({
         documentType: documentType || 'legal_notice',
         facts: facts || {},
         jurisdiction: jurisdiction || 'other',
         customInstructions,
         templateId
-      }, { requestId: (req as AppRequest).id, timeoutMs: 5000 });
+      }, { requestId: (req as AppRequest).id, timeoutMs: 15000 });
 
-      if (aiResult?.sections?.length) {
-        sections = aiResult.sections;
-        generatedClauses = sections.map((s: any) => s.content || s.text || '');
-      }
-      if (aiResult?.warnings?.length) {
-        warnings = aiResult.warnings;
+      if (aiResult && Array.isArray(aiResult.sections) && aiResult.sections.length > 0) {
+        generatedClauses = aiResult.sections.map((s: any) => {
+          const titlePrefix = s.title ? `${s.title}:\n` : '';
+          return `${titlePrefix}${s.content || s.text || ''}`.trim();
+        }).filter(Boolean);
+        if (aiResult.title) title = aiResult.title;
+        if (aiResult.heading) heading = aiResult.heading;
+        if (aiResult.subject) subject = aiResult.subject;
+        if (aiResult.toPlaceholder) toPlaceholder = aiResult.toPlaceholder;
+        if (aiResult.ultimatum) ultimatum = aiResult.ultimatum;
+        if (aiResult.signOffTitle) signOffTitle = aiResult.signOffTitle;
+        if (aiResult.review_status) reviewStatus = aiResult.review_status;
       }
     } catch (e: any) {
-      console.warn('[AI Client] Upstream generation unavailable, utilizing legal synthesizer:', e.message);
-      generatedClauses = synthesized.bodyClauses;
+      console.warn('[AI Drafting API Warning] Remote FastAPI unavailable, falling back to AI Orchestrator:', e.message);
+    }
+
+    // 2. Fallback to Central AI Orchestrator (LEGAL_DRAFT_STUDIO)
+    if (generatedClauses.length === 0) {
+      const studioRes = await aiOrchestrator.executeTask({
+        taskType: 'LEGAL_DRAFT_STUDIO',
+        payload: {
+          prompt: customInstructions || documentType || 'Draft legal document',
+          documentType,
+          facts,
+          templateId,
+          referenceStyle,
+          existingClauses,
+          skillName
+        },
+        jurisdiction: jurisdiction || 'India'
+      });
+
+      if (studioRes.success && studioRes.data) {
+        const d = studioRes.data;
+        if (Array.isArray(d.bodyClauses) && d.bodyClauses.length > 0) {
+          generatedClauses = d.bodyClauses;
+        }
+        if (d.title) title = d.title;
+        if (d.heading) heading = d.heading;
+        if (d.subject) subject = d.subject;
+        if (d.toPlaceholder) toPlaceholder = d.toPlaceholder;
+        if (d.ultimatum) ultimatum = d.ultimatum;
+        if (d.signOffTitle) signOffTitle = d.signOffTitle;
+        styleApplied = Boolean(d.styleApplied);
+      }
     }
 
     if (generatedClauses.length === 0) {
-      generatedClauses = synthesized.bodyClauses;
+      return res.status(502).json({
+        success: false,
+        error: { code: 'EMPTY_AI_DRAFT', message: 'The AI drafting engine returned an empty document.' },
+        requestId: (req as AppRequest).id
+      });
     }
 
     const draftId = `draft-${Date.now()}`;
     const newDraft = await Draft.create({
       id: draftId,
       userId,
-      title: synthesized.title,
+      title,
       category: documentType || 'notice',
       role: req.user?.role || 'advocate',
       lastEdited: 'Just now',
       wordsCount: generatedClauses.join(' ').split(/\s+/).filter(Boolean).length,
-      preview: generatedClauses[0] || 'Draft prepared for review',
+      preview: generatedClauses[0]?.slice(0, 150) || 'AI generated draft prepared for review',
       templateId: templateId || 'template-1',
-      heading: synthesized.heading,
-      subject: synthesized.subject,
+      heading,
+      subject,
       bodyClauses: generatedClauses,
-      ultimatum: synthesized.ultimatum,
-      signOffTitle: synthesized.signOffTitle,
+      ultimatum,
+      signOffTitle,
       facts: facts || {},
       version: 1
     });
@@ -494,26 +425,27 @@ export const generateDraft = async (req: AuthenticatedRequest, res: Response) =>
       data: {
         draftId: newDraft.id,
         draft: newDraft,
-        title: synthesized.title,
-        heading: synthesized.heading,
-        subject: synthesized.subject,
-        toPlaceholder: synthesized.toPlaceholder,
+        title,
+        heading,
+        subject,
+        toPlaceholder,
         bodyClauses: generatedClauses,
-        ultimatum: synthesized.ultimatum,
-        signOffTitle: synthesized.signOffTitle,
-        status: 'draft_needs_review',
+        ultimatum,
+        signOffTitle,
+        status: reviewStatus,
         version: 1,
-        sections,
-        assumptions: [],
-        warnings,
-        placeholders: []
+        sections: generatedClauses.map((c, idx) => ({ title: `Clause ${idx + 1}`, content: c })),
+        assumptions: aiResult?.assumptions || [],
+        warnings: aiResult?.warnings || [],
+        placeholders: aiResult?.placeholders || [],
+        styleApplied
       },
       requestId: (req as AppRequest).id
     });
   } catch (error: any) {
     res.status(500).json({
       success: false,
-      error: { code: 'GENERATE_ERROR', message: 'Failed to generate draft.' },
+      error: { code: 'GENERATE_ERROR', message: error.message || 'Failed to generate draft.' },
       requestId: (req as AppRequest).id
     });
   }
@@ -825,7 +757,22 @@ export const addClientCommunication = async (req: AuthenticatedRequest, res: Res
 // -------------------------------------------------------------
 export const getBareActs = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const acts = await BareAct.find();
+    const { category, q } = req.query as { category?: string; q?: string };
+    const filter: any = {};
+    if (category && category !== 'All') {
+      filter.category = category;
+    }
+    if (q && q.trim()) {
+      const term = q.trim();
+      filter.$or = [
+        { name: { $regex: term, $options: 'i' } },
+        { summary: { $regex: term, $options: 'i' } },
+        { 'keySections.number': { $regex: term, $options: 'i' } },
+        { 'keySections.title': { $regex: term, $options: 'i' } },
+        { 'keySections.plainExplanation': { $regex: term, $options: 'i' } }
+      ];
+    }
+    const acts = await BareAct.find(filter).lean();
     res.json({ success: true, data: acts, requestId: (req as AppRequest).id });
   } catch (error: any) {
     res.status(500).json({
@@ -836,59 +783,145 @@ export const getBareActs = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
+export const getBareActById = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const act = await BareAct.findOne({ id }).lean();
+    if (!act) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Bare act not found.' },
+        requestId: (req as AppRequest).id
+      });
+    }
+    res.json({ success: true, data: act, requestId: (req as AppRequest).id });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'ACT_ERROR', message: 'Failed to retrieve bare act.' },
+      requestId: (req as AppRequest).id
+    });
+  }
+};
+
+export const searchBareActs = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { q, category } = req.query as { q?: string; category?: string };
+    const orchestratorRes = await aiOrchestrator.executeTask({
+      taskType: 'BAR_STATUTE_SEARCH',
+      query: q || '',
+      payload: { category, searchTerm: q },
+      options: { requestId: (req as AppRequest).id }
+    });
+
+    res.json({
+      success: orchestratorRes.success,
+      data: orchestratorRes.data,
+      sourceReferences: orchestratorRes.sourceReferences,
+      aiSystem: orchestratorRes.aiSystem,
+      disclaimer: orchestratorRes.disclaimer,
+      requestId: (req as AppRequest).id
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'SEARCH_ERROR', message: error.message || 'Failed to search Bare Acts.' },
+      requestId: (req as AppRequest).id
+    });
+  }
+};
+
+export const explainBareAct = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { query, actName, sectionNumber } = req.body;
+    const effectiveQuery = query || `${actName ? actName + ' ' : ''}${sectionNumber || ''}`;
+    const orchestratorRes = await aiOrchestrator.executeTask({
+      taskType: 'BAR_STATUTE_SEARCH',
+      query: effectiveQuery,
+      payload: { searchTerm: effectiveQuery },
+      options: { requestId: (req as AppRequest).id }
+    });
+
+    res.json({
+      success: orchestratorRes.success,
+      data: orchestratorRes.data,
+      sourceReferences: orchestratorRes.sourceReferences,
+      aiSystem: orchestratorRes.aiSystem,
+      disclaimer: orchestratorRes.disclaimer,
+      requestId: (req as AppRequest).id
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'EXPLAIN_ERROR', message: error.message || 'Failed to generate statutory explanation.' },
+      requestId: (req as AppRequest).id
+    });
+  }
+};
+
+export const askNexoraAi = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { query, matterContext, aiMode, discussionId } = req.body;
+    if (!query || !query.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_INPUT', message: 'Query is required for Nexora AI.' },
+        requestId: (req as AppRequest).id
+      });
+    }
+
+    const userId = req.user?._id?.toString();
+    const orchestratorRes = await aiOrchestrator.executeTask({
+      taskType: 'NEXORA_ASSISTANT',
+      userId,
+      query: query.trim(),
+      context: matterContext,
+      payload: { query: query.trim(), matterContext, aiMode },
+      options: { requestId: (req as AppRequest).id, searchMode: aiMode }
+    });
+
+    if (!orchestratorRes.success) {
+      return res.status(502).json({
+        success: false,
+        error: orchestratorRes.error || { code: 'NEXORA_ERROR', message: 'Failed to process litigation query.' },
+        requestId: (req as AppRequest).id
+      });
+    }
+
+    res.json({
+      success: true,
+      data: orchestratorRes.data,
+      sourceReferences: orchestratorRes.sourceReferences,
+      aiSystem: orchestratorRes.aiSystem,
+      disclaimer: orchestratorRes.disclaimer,
+      requestId: (req as AppRequest).id
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'NEXORA_ERROR', message: error.message || 'Nexora assistant error.' },
+      requestId: (req as AppRequest).id
+    });
+  }
+};
+
+
 export const getLibraryData = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const acts = await BareAct.find();
+    const acts = await BareAct.find().lean();
+    const libItems = await LegalLibraryItem.find().lean();
 
-    const dictionaryTerms = [
-      {
-        id: 'term-audi',
-        term: 'Audi alteram partem',
-        category: 'Latin Maxim',
-        letter: 'A',
-        literalTranslation: 'Hear the other side',
-        definition: 'No person should be condemned unheard. A fundamental rule of natural justice.',
-        contextUsage: 'Cancellation of tender without show cause notice violates audi alteram partem.',
-        landmarkCase: 'Maneka Gandhi v. Union of India (1978) 1 SCC 248'
-      },
-      {
-        id: 'term-caveat',
-        term: 'Caveat emptor',
-        category: 'Latin Maxim',
-        letter: 'C',
-        literalTranslation: 'Let the buyer beware',
-        definition: 'The principle that the buyer alone is responsible for checking the quality and suitability of goods.',
-        contextUsage: 'Section 16 of Sale of Goods Act, 1930 codifies caveat emptor with implied exceptions.',
-        landmarkCase: 'Ranbirsingh Shankarsingh Thakur v. Hindusthan General Insurance (1971)'
-      }
-    ];
+    const dictionaryTerms = libItems
+      .filter((i) => i.itemType === 'dictionaryTerm')
+      .map((i) => ({ id: i.id, term: i.titleOrTerm, category: i.category, ...i.data }));
 
-    const legalForms = [
-      {
-        id: 'form-bail',
-        title: 'Application for Anticipatory Bail',
-        category: 'Criminal',
-        courtJurisdiction: 'High Court / Sessions Court',
-        governingStatute: 'Section 482 of BNSS, 2023',
-        description: 'Standard statutory petition seeking pre-arrest protection with undertaking affidavit.',
-        templateText: 'IN THE COURT OF SESSIONS JUDGE AT [CITY]\n\nIN THE MATTER OF:\n[Applicant Name] ... Applicant\nVERSUS\nState of [State] ... Respondent\n\nAPPLICATION UNDER SECTION 482 BNSS 2023...'
-      }
-    ];
+    const legalForms = libItems
+      .filter((i) => i.itemType === 'legalForm')
+      .map((i) => ({ id: i.id, title: i.titleOrTerm, category: i.category, ...i.data }));
 
-    const judgments = [
-      {
-        id: 'jdg-puttaswamy',
-        title: 'Justice K.S. Puttaswamy (Retd.) v. Union of India',
-        citation: '(2017) 10 SCC 1',
-        court: 'Supreme Court of India (9-Judge Bench)',
-        benchStrength: '9 Judges',
-        decisionDate: '24 Aug 2017',
-        subject: 'Fundamental Right to Privacy',
-        headnote: 'Right to privacy is an intrinsic part of the right to life and personal liberty under Article 21.',
-        ratioDecidendi: 'Privacy is constitutionally protected under Article 21 and Part III.',
-        keyStatutes: ['Article 21', 'Article 14', 'Article 19']
-      }
-    ];
+    const judgments = libItems
+      .filter((i) => i.itemType === 'judgment')
+      .map((i) => ({ id: i.id, title: i.titleOrTerm, category: i.category, ...i.data }));
 
     res.json({
       success: true,
@@ -914,47 +947,42 @@ export const getLibraryData = async (req: AuthenticatedRequest, res: Response) =
 // -------------------------------------------------------------
 export const getVerificationReport = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const citations = [
-      {
-        id: 'cite-1',
-        number: 1,
-        type: 'Incomplete citation',
-        severity: 'High',
-        status: 'issue',
-        originalText: '...under the Companies Act, 2013...',
-        explanation: 'Section reference is missing. Please specify the relevant section (e.g., Section 2(20) or Section 7).',
-        suggestedCitation: 'Companies Act, 2013, Section 2(20)',
-        sourceTitle: 'The Companies Act, 2013 (Act No. 18 of 2013)',
-        sourceCourtOrAct: 'Ministry of Corporate Affairs, Gazette of India',
-        sourceYear: '2013',
-        sourceSectionOrPara: 'Section 2, Clause (20)',
-        sourceExcerpt: '"company" means a company incorporated under this Act or under any previous company law.',
-        pageNumber: 2,
-        highlightKey: 'h1',
-        appliedText: 'the Company is duly incorporated and validly existing under Section 2(20) of the Companies Act, 2013, and is in good standing.'
-      }
-    ];
+    const userId = req.user?._id?.toString();
+    const { documentId } = req.query;
+    const filter: any = {};
+    if (userId) filter.userId = userId;
+    if (documentId) filter.documentId = documentId;
 
+    const record = await CitationVerificationRecord.findOne(filter).sort({ createdAt: -1 });
+
+    if (record) {
+      return res.json({
+        success: true,
+        data: {
+          score: record.score,
+          citations: record.citations,
+          summary: record.summary,
+          legacyFlags: record.legacyFlags || []
+        },
+        requestId: (req as AppRequest).id
+      });
+    }
+
+    // Return real empty findings if user has not run verification yet
     res.json({
       success: true,
       data: {
-        score: 84,
-        citations,
-        legacyFlags: [
-          {
-            raw: 'Section 302 IPC',
-            legacySection: 'Section 302 Indian Penal Code',
-            replacement: 'Section 103 Bharatiya Nyaya Sanhita, 2023',
-            note: 'Acts committed post 1 July 2024 fall under BNS.'
-          }
-        ]
+        score: 100,
+        citations: [],
+        summary: { total_citations: 0, verified_count: 0, issue_count: 0 },
+        legacyFlags: []
       },
       requestId: (req as AppRequest).id
     });
   } catch (error: any) {
     res.status(500).json({
       success: false,
-      error: { code: 'VERIFICATION_ERROR', message: 'Failed to generate verification report.' },
+      error: { code: 'VERIFICATION_ERROR', message: 'Failed to retrieve verification report.' },
       requestId: (req as AppRequest).id
     });
   }
@@ -962,7 +990,8 @@ export const getVerificationReport = async (req: AuthenticatedRequest, res: Resp
 
 export const verifyDocumentWithAi = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { text, citations, isDemo } = req.body;
+    const userId = req.user?._id?.toString();
+    const { text, citations, documentId, documentTitle } = req.body;
 
     if (!text || !text.trim()) {
       return res.status(400).json({
@@ -972,39 +1001,82 @@ export const verifyDocumentWithAi = async (req: AuthenticatedRequest, res: Respo
       });
     }
 
-    try {
-      const aiFindings = await aiClient.verifyCitations({
+    // Call Central AI Orchestrator / BAR AI to verify against accessible statutory & judicial records
+    const orchestrationRes = await aiOrchestrator.executeTask({
+      taskType: 'BAR_CITATION_VERIFY',
+      userId,
+      payload: {
         text,
         citations: citations || []
-      }, { requestId: (req as AppRequest).id });
+      },
+      options: { requestId: (req as AppRequest).id, timeoutMs: 30000 }
+    });
 
-      return res.json({
-        success: true,
-        data: {
-          score: aiFindings?.summary?.verified_count ? 90 : 75,
-          citations: aiFindings?.results || [],
-          summary: aiFindings?.summary || {},
-          legacyFlags: []
-        },
+    if (!orchestrationRes.success || !orchestrationRes.data) {
+      return res.status(502).json({
+        success: false,
+        error: orchestrationRes.error || { code: 'VERIFICATION_FAILED', message: 'Citation verification engine encountered an error.' },
         requestId: (req as AppRequest).id
       });
-    } catch (err: any) {
-      console.warn('[AI Client] Citation verification failed:', err.message);
-
-      if (!isDemo) {
-        return res.status(502).json({
-          success: false,
-          error: {
-            code: 'UPSTREAM_AI_UNAVAILABLE',
-            message: 'Citation verification engine is currently unavailable. Please try again shortly.'
-          },
-          requestId: (req as AppRequest).id
-        });
-      }
-
-      // Explicit demo report fallback
-      return getVerificationReport(req, res);
     }
+
+    const verifyData = orchestrationRes.data;
+    const resultsList = Array.isArray(verifyData.results) ? verifyData.results : [];
+
+    const mappedCitations = resultsList.map((r: any, idx: number) => {
+      const source = (r.sources && r.sources[0]) || {};
+      const isVerified = r.status === 'verified';
+      return {
+        id: r.citation_id || `cite-${idx + 1}`,
+        number: idx + 1,
+        type: isVerified ? 'Verified statutory reference' : (r.status === 'partially_verified' ? 'Partially verified reference' : 'Incomplete citation'),
+        severity: isVerified ? 'Low' : 'Medium',
+        status: isVerified ? 'verified' : 'issue',
+        originalText: r.raw_text || (r.notes ? r.notes.slice(0, 100) : 'Statutory citation'),
+        explanation: r.notes || (isVerified ? 'Authority verified against accessible legal records.' : 'Citation requires formal statutory section verification.'),
+        suggestedCitation: r.normalized_form || source.title || 'Verified Citation',
+        sourceTitle: source.title || 'Legal Reference',
+        sourceCourtOrAct: source.jurisdiction || 'Official Gazette / Judicial Records',
+        sourceYear: '2024',
+        sourceSectionOrPara: source.excerpt ? source.excerpt.slice(0, 80) : 'Statutory clause',
+        sourceExcerpt: source.excerpt || r.notes || 'Citation extracted and checked by AI.',
+        pageNumber: 1,
+        highlightKey: `h-${idx + 1}`,
+        appliedText: r.normalized_form || source.title || ''
+      };
+    });
+
+    const verifiedCount = mappedCitations.filter((c: any) => c.status === 'verified').length;
+    const issueCount = mappedCitations.length - verifiedCount;
+    const score = mappedCitations.length > 0 ? Math.round((verifiedCount / mappedCitations.length) * 100) : 100;
+
+    // Persist real verification results to MongoDB
+    await CitationVerificationRecord.create({
+      id: `verify-${Date.now()}`,
+      userId,
+      documentId,
+      documentTitle: documentTitle || 'Legal Document',
+      rawText: text.slice(0, 2000),
+      score,
+      totalCitations: mappedCitations.length,
+      verifiedCount,
+      issueCount,
+      citations: mappedCitations,
+      summary: verifyData.summary || { total_citations: mappedCitations.length, verified_count: verifiedCount, issue_count: issueCount },
+      legacyFlags: [],
+      verifiedAt: new Date()
+    }).catch((err) => console.warn('[Verification DB] Failed to persist report:', err.message));
+
+    return res.json({
+      success: true,
+      data: {
+        score,
+        citations: mappedCitations,
+        summary: verifyData.summary || { total_citations: mappedCitations.length, verified_count: verifiedCount, issue_count: issueCount },
+        legacyFlags: []
+      },
+      requestId: (req as AppRequest).id
+    });
   } catch (error: any) {
     res.status(500).json({
       success: false,
@@ -1019,37 +1091,19 @@ export const verifyDocumentWithAi = async (req: AuthenticatedRequest, res: Respo
 // -------------------------------------------------------------
 export const getResearchThreads = async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const userId = req.user?._id?.toString();
+    const filter = userId ? { userId } : {};
+    const threads = await ResearchThread.find(filter).sort({ updatedAt: -1 }).limit(30);
+
     res.json({
       success: true,
-      data: [
-        {
-          id: 'conv-1',
-          title: 'Section 138 NI Act rulings',
-          time: 'Today',
-          group: 'Today',
-          messages: [
-            {
-              id: 'msg-1',
-              sender: 'user',
-              content: 'What is the current position on interim compensation under Section 143A NI Act?',
-              timestamp: '10:40 AM'
-            },
-            {
-              id: 'msg-2',
-              sender: 'assistant',
-              content: 'The Supreme Court in Rakesh Ranjan Shrivastava v. State of Jharkhand (2024) held that Section 143A interim compensation is directory and not mandatory.',
-              timestamp: '10:42 AM',
-              citations: [{ title: 'Rakesh Ranjan Shrivastava v. State of Jharkhand', court: 'Supreme Court', year: '2024', citation: '2024 INSC 211' }]
-            }
-          ]
-        }
-      ],
+      data: threads,
       requestId: (req as AppRequest).id
     });
   } catch (error: any) {
     res.status(500).json({
       success: false,
-      error: { code: 'RESEARCH_ERROR', message: 'Failed to load research history.' },
+      error: { code: 'RESEARCH_ERROR', message: error.message || 'Failed to load research history.' },
       requestId: (req as AppRequest).id
     });
   }
@@ -1057,7 +1111,7 @@ export const getResearchThreads = async (req: AuthenticatedRequest, res: Respons
 
 export const askResearchQuestion = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { question, context, isDemo } = req.body;
+    const { question, context, searchMode, mode, threadId } = req.body;
     if (!question || !question.trim()) {
       return res.status(400).json({
         success: false,
@@ -1066,60 +1120,71 @@ export const askResearchQuestion = async (req: AuthenticatedRequest, res: Respon
       });
     }
 
+    const effectiveMode = searchMode || mode || 'Standard Mode';
+    const userId = req.user?._id?.toString();
+
+    // Query live AI service directly via FastAPI / Gemini API (No hardcoding)
     try {
       const aiResponse = await aiClient.answerLegalQuestion({
-        question,
-        context
-      }, { requestId: (req as AppRequest).id });
+        question: question.trim(),
+        context,
+        searchMode: effectiveMode
+      }, { requestId: (req as AppRequest).id, timeoutMs: 30000 });
 
-      res.json({
+      const answerContent = aiResponse?.answer || aiResponse?.content || aiResponse?.response;
+      if (!answerContent) {
+        throw new Error('AI service returned an empty response.');
+      }
+
+      const citations = aiResponse.citations || aiResponse.case_law_references || [];
+      const statutes = aiResponse.statutes || aiResponse.statutory_references || [];
+
+      // Persist real conversation to database
+      const activeThreadId = threadId || `conv-${Date.now()}`;
+      const userMsg = {
+        id: `msg-${Date.now()}-user`,
+        sender: 'user' as const,
+        content: question.trim(),
+        timestamp: 'Just now'
+      };
+      const assistantMsg = {
+        id: `msg-${Date.now()}-ai`,
+        sender: 'assistant' as const,
+        content: answerContent,
+        timestamp: 'Just now',
+        citations,
+        statutes
+      };
+
+      try {
+        await ResearchThread.findOneAndUpdate(
+          { id: activeThreadId },
+          {
+            id: activeThreadId,
+            userId,
+            title: question.trim().length > 40 ? question.trim().slice(0, 40) + '...' : question.trim(),
+            time: 'Just now',
+            group: 'Today',
+            $push: { messages: { $each: [userMsg, assistantMsg] } }
+          },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+      } catch (dbErr: any) {
+        console.warn('[Research DB] Failed to persist thread:', dbErr.message);
+      }
+
+      return res.json({
         success: true,
-        data: {
-          id: `msg-${Date.now()}`,
-          sender: 'assistant',
-          content: aiResponse.answer || aiResponse.response || 'Analysis complete.',
-          timestamp: 'Just now',
-          citations: aiResponse.case_law_references || [],
-          statutes: aiResponse.statutory_references || []
-        },
+        data: assistantMsg,
         requestId: (req as AppRequest).id
       });
     } catch (e: any) {
-      console.warn('[AI Client] Research question failed:', e.message);
-
-      // Contextual legal research answer
-      let answerText = `Under Indian jurisprudence regarding "${question}": `;
-      let citations: string[] = [];
-      let statutes: string[] = [];
-
-      const qLower = question.toLowerCase();
-      if (qLower.includes('park') || qLower.includes('environment') || qLower.includes('encroachment')) {
-        answerText = 'Under the Public Trust Doctrine, municipal authorities hold public parks and green spaces in trust for the public. In Bangalore Medical Trust v. B.S. Muddappa (1991) 4 SCC 54 and M.C. Mehta v. Kamal Nath (1997) 1 SCC 388, the Supreme Court ruled that open spaces reserved for public parks cannot be alienated or diverted. Aggrieved citizens can invoke Article 226 before the High Court for a Writ of Mandamus.';
-        citations = ['Bangalore Medical Trust v. B.S. Muddappa (1991) 4 SCC 54', 'M.C. Mehta v. Kamal Nath (1997) 1 SCC 388'];
-        statutes = ['Constitution of India (Articles 21 & 226)', 'Environment (Protection) Act, 1986'];
-      } else if (qLower.includes('rent') || qLower.includes('eviction')) {
-        answerText = 'Tenancy disputes and rent default are governed by the relevant State Rent Control Acts and Section 106 of the Transfer of Property Act, 1882. A 15-day formal legal notice terminating tenancy or demanding arrears is mandatory prior to instituting eviction proceedings.';
-        citations = ['V. Dhanapal Chettiar v. Yesodai Ammal (1979) 4 SCC 214'];
-        statutes = ['Transfer of Property Act, 1882 (Section 106)', 'State Rent Control Acts'];
-      } else if (qLower.includes('bail') || qLower.includes('criminal')) {
-        answerText = 'Applications for regular bail are governed by Section 439 of Cr.P.C. (now Section 483 of Bharatiya Nagarik Suraksha Sanhita, 2023). Under Arnesh Kumar v. State of Bihar and Satender Kumar Antil, bail is the rule and jail is an exception where offenses carry less than 7 years punishment.';
-        citations = ['Satender Kumar Antil v. CBI (2022) 10 SCC 51', 'Arnesh Kumar v. State of Bihar (2014) 8 SCC 273'];
-        statutes = ['Bharatiya Nagarik Suraksha Sanhita, 2023 (Section 483)', 'Cr.P.C. (Section 439)'];
-      } else {
-        answerText = `In analyzing "${question}", the relevant legal principles require compliance with constitutional procedural fairness under Articles 14 and 21, as well as adherence to statutory limitation periods.`;
-        citations = ['Maneka Gandhi v. Union of India (1978) 1 SCC 248'];
-        statutes = ['Constitution of India (Articles 14 & 21)'];
-      }
-
-      res.json({
-        success: true,
-        data: {
-          id: `msg-${Date.now()}`,
-          sender: 'assistant',
-          content: answerText,
-          timestamp: 'Just now',
-          citations,
-          statutes
+      console.error('[AI Assistant API Error]:', e.message);
+      return res.status(502).json({
+        success: false,
+        error: {
+          code: 'AI_PROVIDER_ERROR',
+          message: e.message || 'AI Legal Research Service encountered an upstream error.'
         },
         requestId: (req as AppRequest).id
       });
@@ -1127,7 +1192,7 @@ export const askResearchQuestion = async (req: AuthenticatedRequest, res: Respon
   } catch (error: any) {
     res.status(500).json({
       success: false,
-      error: { code: 'RESEARCH_ERROR', message: 'Failed to process research inquiry.' },
+      error: { code: 'RESEARCH_ERROR', message: error.message || 'Failed to process research inquiry.' },
       requestId: (req as AppRequest).id
     });
   }
@@ -1248,10 +1313,47 @@ export const getStudentAssets = async (req: AuthenticatedRequest, res: Response)
   }
 };
 
-export const submitCourtroomTurn = async (req: AuthenticatedRequest, res: Response) => {
+export const startCourtroomSession = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { id } = req.params;
-    const { argument } = req.body;
+    const { topic, user_side, userSide, difficulty, court, appearanceRole, scenarioId } = req.body;
+    const finalUserSide = userSide || user_side || 'petitioner';
+    const finalDifficulty = (difficulty || 'medium').toLowerCase();
+
+    const hearingRes = await courtroomService.startHearing({
+      topic: topic || 'State v. Rohan Mehta (Bail Application under CrPC / BNSS)',
+      userSide: finalUserSide,
+      difficulty: finalDifficulty,
+      court,
+      appearanceRole,
+      scenarioId
+    });
+
+    res.json({
+      success: true,
+      data: hearingRes,
+      requestId: (req as AppRequest).id
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'COURTROOM_START_ERROR', message: error.message || 'Failed to initiate courtroom hearing.' },
+      requestId: (req as AppRequest).id
+    });
+  }
+};
+
+export const submitCourtroomArgument = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { session_id, sessionId: bodySessionId, argument } = req.body;
+    const targetSessionId = String(req.params.id || session_id || bodySessionId || '').trim();
+
+    if (!targetSessionId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_SESSION_ID', message: 'Session ID is required.' },
+        requestId: (req as AppRequest).id
+      });
+    }
 
     if (!argument || !argument.trim()) {
       return res.status(400).json({
@@ -1261,25 +1363,150 @@ export const submitCourtroomTurn = async (req: AuthenticatedRequest, res: Respon
       });
     }
 
+    const turnRes = await courtroomService.submitArgument({
+      sessionId: targetSessionId,
+      argument: argument.trim()
+    });
+
+    res.json({
+      success: true,
+      data: turnRes,
+      requestId: (req as AppRequest).id
+    });
+  } catch (error: any) {
+    const status = error.message.includes('not found') ? 404 : error.message.includes('already being processed') ? 409 : 500;
+    res.status(status).json({
+      success: false,
+      error: { code: 'COURTROOM_ARGUMENT_ERROR', message: error.message || 'Failed to process courtroom submission.' },
+      requestId: (req as AppRequest).id
+    });
+  }
+};
+
+export const endCourtroomSession = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const targetSessionId = String(req.params.id || req.body.session_id || req.body.sessionId || '').trim();
+    if (!targetSessionId) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_SESSION_ID', message: 'Session ID is required.' },
+        requestId: (req as AppRequest).id
+      });
+    }
+
+    const verdictRes = await courtroomService.endHearing(targetSessionId);
+    res.json({
+      success: true,
+      data: verdictRes,
+      requestId: (req as AppRequest).id
+    });
+  } catch (error: any) {
+    const status = error.message.includes('not found') ? 404 : 500;
+    res.status(status).json({
+      success: false,
+      error: { code: 'COURTROOM_END_ERROR', message: error.message || 'Failed to conclude courtroom session.' },
+      requestId: (req as AppRequest).id
+    });
+  }
+};
+
+export const getCourtroomSession = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    const session = courtroomService.getSession(id);
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: `Hearing session '${id}' not found.` },
+        requestId: (req as AppRequest).id
+      });
+    }
+
     res.json({
       success: true,
       data: {
-        sessionId: id,
-        turnNumber: 2,
-        judgeResponse: `Counsel, noted your argument: "${argument.slice(0, 80)}...". How do you address the parity objections under Section 482 BNSS?`,
-        evaluation: {
-          clarityScore: 88,
-          legalRelevanceScore: 92,
-          statuteAccuracy: 'Verified Section 482 BNSS',
-          feedback: 'Reliance on parity grounds is well-taken. Maintain focused precedent distinguishing.'
-        }
+        session,
+        status: session.is_active ? 'active' : 'concluded'
       },
       requestId: (req as AppRequest).id
     });
   } catch (error: any) {
     res.status(500).json({
       success: false,
-      error: { code: 'COURTROOM_ERROR', message: 'Failed to process courtroom submission.' },
+      error: { code: 'COURTROOM_STATUS_ERROR', message: error.message || 'Failed to retrieve hearing status.' },
+      requestId: (req as AppRequest).id
+    });
+  }
+};
+
+export const submitCourtroomTurn = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    const { argument, scenario, court, difficulty, appearanceRole, turnHistory } = req.body;
+
+    if (!argument || !argument.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_ARGUMENT', message: 'Argument text is required.' },
+        requestId: (req as AppRequest).id
+      });
+    }
+
+    // If courtroomService has an active session for this id, route to it
+    const existingSession = courtroomService.getSession(id);
+    if (existingSession && existingSession.is_active) {
+      const turnRes = await courtroomService.submitArgument({
+        sessionId: id,
+        argument: argument.trim()
+      });
+      return res.json({
+        success: true,
+        data: {
+          sessionId: id,
+          ...turnRes
+        },
+        aiSystem: 'NEXORA AI (Courtroom Engine)',
+        requestId: (req as AppRequest).id
+      });
+    }
+
+    const userId = req.user?._id?.toString();
+    const orchestratorRes = await aiOrchestrator.executeTask({
+      taskType: 'NEXORA_COURTROOM_SIMULATION',
+      userId,
+      payload: {
+        scenario,
+        court,
+        difficulty,
+        appearanceRole,
+        argument: argument.trim(),
+        turnHistory: Array.isArray(turnHistory) ? turnHistory : []
+      },
+      options: { requestId: (req as AppRequest).id }
+    });
+
+    if (!orchestratorRes.success) {
+      return res.status(502).json({
+        success: false,
+        error: orchestratorRes.error || { code: 'COURTROOM_ERROR', message: 'Courtroom simulation failed.' },
+        requestId: (req as AppRequest).id
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        sessionId: id,
+        ...orchestratorRes.data
+      },
+      sourceReferences: orchestratorRes.sourceReferences,
+      aiSystem: orchestratorRes.aiSystem,
+      requestId: (req as AppRequest).id
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'COURTROOM_ERROR', message: error.message || 'Failed to process courtroom submission.' },
       requestId: (req as AppRequest).id
     });
   }
@@ -1288,40 +1515,86 @@ export const submitCourtroomTurn = async (req: AuthenticatedRequest, res: Respon
 export const submitExam = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { answers } = req.body;
+    const { answers, questions } = req.body;
 
-    // Server-side secret answer key
-    const answerKey: Record<string, number> = {
-      '1': 1 // Section 482 BNSS
-    };
+    const userId = req.user?._id?.toString();
+    const orchestratorRes = await aiOrchestrator.executeTask({
+      taskType: 'NEXORA_EXAM_EVAL',
+      userId,
+      payload: {
+        testId: id,
+        answers: answers || {},
+        questions: questions || []
+      },
+      options: { requestId: (req as AppRequest).id }
+    });
 
-    let correctCount = 0;
-    const totalQuestions = Object.keys(answerKey).length;
-
-    for (const [qId, selectedIdx] of Object.entries(answers || {})) {
-      if (answerKey[qId] === selectedIdx) {
-        correctCount++;
-      }
+    if (!orchestratorRes.success) {
+      return res.status(502).json({
+        success: false,
+        error: orchestratorRes.error || { code: 'EXAM_EVAL_ERROR', message: 'Assessment evaluation failed.' },
+        requestId: (req as AppRequest).id
+      });
     }
-
-    const percentage = Math.round((correctCount / totalQuestions) * 100);
 
     res.json({
       success: true,
       data: {
         testId: id,
-        correctCount,
-        totalQuestions,
-        percentage,
-        grade: percentage >= 80 ? 'Grade A+' : percentage >= 60 ? 'Grade A' : 'Grade B',
-        passed: percentage >= 50
+        ...orchestratorRes.data
       },
+      sourceReferences: orchestratorRes.sourceReferences,
+      aiSystem: orchestratorRes.aiSystem,
       requestId: (req as AppRequest).id
     });
   } catch (error: any) {
     res.status(500).json({
       success: false,
-      error: { code: 'EXAM_ERROR', message: 'Failed to process exam evaluation.' },
+      error: { code: 'EXAM_ERROR', message: error.message || 'Failed to process exam evaluation.' },
+      requestId: (req as AppRequest).id
+    });
+  }
+};
+
+export const generateMootMemorial = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { topic, facts, side, jurisdiction } = req.body;
+    const userId = req.user?._id?.toString();
+
+    const orchestratorRes = await aiOrchestrator.executeTask({
+      taskType: 'COMBINED_MOOT_WORKFLOW',
+      userId,
+      query: topic || 'Moot Court Memorial',
+      context: facts,
+      payload: {
+        topic: topic || 'Constitutional Validity and Fundamental Rights',
+        facts: facts || 'Factual matrix concerning statutory interpretation and constitutional guarantees.',
+        side: side || 'petitioner',
+        jurisdictionName: jurisdiction || 'Supreme Court of India'
+      },
+      options: { requestId: (req as AppRequest).id }
+    });
+
+    if (!orchestratorRes.success) {
+      return res.status(502).json({
+        success: false,
+        error: orchestratorRes.error || { code: 'MOOT_WORKFLOW_FAILED', message: 'Moot Memorial generation failed.' },
+        requestId: (req as AppRequest).id
+      });
+    }
+
+    res.json({
+      success: true,
+      data: orchestratorRes.data,
+      sourceReferences: orchestratorRes.sourceReferences,
+      aiSystem: orchestratorRes.aiSystem,
+      disclaimer: orchestratorRes.disclaimer,
+      requestId: (req as AppRequest).id
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'MOOT_ERROR', message: error.message || 'Failed to process Moot Memorial.' },
       requestId: (req as AppRequest).id
     });
   }
@@ -1412,7 +1685,7 @@ export const createTranslationJob = async (req: AuthenticatedRequest, res: Respo
       }
     }
 
-    const translationResult = translateDocumentClauses(inputClauses, targetLang || 'Hindi');
+    const translationResult = await translateDocumentClausesAsync(inputClauses, targetLang || 'Hindi');
 
     res.status(202).json({
       success: true,
@@ -1469,13 +1742,11 @@ export const askCitizenQuestion = async (req: AuthenticatedRequest, res: Respons
 
 export const getCitizenGlossary = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const glossary = [
-      { term: 'Sub-judice', meaning: 'A matter currently under trial or consideration by a judge, so public debate might be restricted.' },
-      { term: 'Caveat', meaning: 'A formal notice requesting the court not to pass any order without first informing you.' },
-      { term: 'Affidavit', meaning: 'A written statement confirmed by oath or affirmation, for use as evidence in court.' },
-      { term: 'Injunction', meaning: 'An official court order preventing someone from doing a particular act (like vacating or demolishing).' },
-      { term: 'Cognizable Offence', meaning: 'A category of crime where police can arrest someone without an arrest warrant.' }
-    ];
+    const items = await LegalLibraryItem.find({ itemType: 'citizenGlossary' }).lean();
+    const glossary = items.map((item: any) => ({
+      term: item.titleOrTerm,
+      meaning: item.data?.meaning || ''
+    }));
     res.json({ success: true, data: glossary, requestId: (req as AppRequest).id });
   } catch (error: any) {
     res.status(500).json({
@@ -1487,22 +1758,23 @@ export const getCitizenGlossary = async (req: AuthenticatedRequest, res: Respons
 };
 
 // -------------------------------------------------------------
-// 13. Voice Gateway (Two-Phase Confirmation)
+// 13. Voice Gateway (Two-Phase Confirmation with DB Persistence)
 // -------------------------------------------------------------
 export const handleVoiceCommand = async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const userId = req.user?._id?.toString() || 'anonymous';
     const { transcript } = req.body;
     const lower = (transcript || '').toLowerCase();
 
     let action = 'NAVIGATE';
     let target = '/advocate';
     let requiresConfirm = false;
-    let confirmToken = undefined;
+    let confirmToken: string | undefined = undefined;
 
     if (lower.includes('delete') || lower.includes('archive') || lower.includes('remove')) {
       action = 'ARCHIVE_DRAFT';
       requiresConfirm = true;
-      confirmToken = `confirm-${Date.now()}`;
+      confirmToken = `confirm-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     } else if (lower.includes('draft') || lower.includes('notice')) {
       action = 'OPEN_DRAFTING';
       target = '/advocate?tab=drafting';
@@ -1511,9 +1783,22 @@ export const handleVoiceCommand = async (req: AuthenticatedRequest, res: Respons
       target = '/advocate?tab=tracker';
     }
 
+    const voiceId = `voice-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+    const commandLog = await VoiceCommandLog.create({
+      id: voiceId,
+      userId,
+      transcript: transcript || '',
+      interpretedAction: action,
+      target,
+      requiresConfirm,
+      confirmToken,
+      status: 'interpreted'
+    });
+
     res.json({
       success: true,
       data: {
+        commandId: (commandLog as any)._id || voiceId,
         interpretedAction: action,
         target,
         requiresConfirm,
@@ -1533,6 +1818,7 @@ export const handleVoiceCommand = async (req: AuthenticatedRequest, res: Respons
 
 export const confirmVoiceAction = async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const userId = req.user?._id?.toString();
     const { confirmToken } = req.body;
     if (!confirmToken) {
       return res.status(400).json({
@@ -1542,10 +1828,29 @@ export const confirmVoiceAction = async (req: AuthenticatedRequest, res: Respons
       });
     }
 
+    const filter: any = { confirmToken };
+    if (userId && userId !== 'anonymous') {
+      filter.userId = userId;
+    }
+
+    const commandLog = await VoiceCommandLog.findOne(filter);
+    if (!commandLog) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'INVALID_TOKEN', message: 'Confirmation token not found or already executed.' },
+        requestId: (req as AppRequest).id
+      });
+    }
+
+    commandLog.status = 'confirmed';
+    await commandLog.save();
+
     res.json({
       success: true,
       data: {
+        commandId: commandLog._id,
         status: 'confirmed',
+        action: commandLog.interpretedAction,
         message: 'Consequential action authorized and successfully executed.'
       },
       requestId: (req as AppRequest).id
@@ -1665,6 +1970,353 @@ export const deleteDocument = async (req: AuthenticatedRequest, res: Response) =
       success: false,
       error: { code: 'DOCUMENT_DELETE_ERROR', message: 'Failed to delete document.' },
       requestId: (req as AppRequest).id
+    });
+  }
+};
+
+// -------------------------------------------------------------
+// 13. File Text & Clause Extraction (Genuine Multi-Page Parser)
+// -------------------------------------------------------------
+export const parseDocumentFile = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { filename, fileBase64, textContent } = req.body;
+    const cleanFilename = (filename || 'Document.pdf').trim();
+    const lowerName = cleanFilename.toLowerCase();
+    const isPdf = lowerName.endsWith('.pdf');
+    const isDocx = lowerName.endsWith('.docx');
+
+    let rawText = '';
+    let pages: Array<{ pageNumber: number; title: string; paragraphs: string[] }> = [];
+
+    if (isPdf && fileBase64) {
+      try {
+        const { spawnSync } = await import('child_process');
+        const script = `
+import pypdf, sys, base64, io, json
+try:
+    raw = base64.b64decode(sys.stdin.read())
+    reader = pypdf.PdfReader(io.BytesIO(raw))
+    res = []
+    for idx, p in enumerate(reader.pages):
+        t = p.extract_text()
+        if t and t.strip():
+            lines = [l.strip() for l in t.split('\\n') if l.strip()]
+            if lines:
+                res.append({"pageNumber": idx + 1, "title": f"Page {idx + 1}", "paragraphs": lines})
+    print(json.dumps(res))
+except Exception as e:
+    print(json.dumps([]))
+`;
+        const proc = spawnSync('python', ['-c', script], {
+          input: fileBase64,
+          encoding: 'utf-8',
+          maxBuffer: 25 * 1024 * 1024
+        });
+        const output = (proc.stdout || '').trim();
+        const jsonMatch = output.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            pages = parsed;
+            rawText = pages.map((p) => p.paragraphs.join('\n')).join('\n\n');
+          }
+        }
+      } catch (err: any) {
+        console.warn('[PDF Parser] Extraction error:', err.message);
+      }
+    } else if (isDocx && fileBase64) {
+      try {
+        const { spawnSync } = await import('child_process');
+        const script = `
+import docx, sys, base64, io, json
+try:
+    raw = base64.b64decode(sys.stdin.read())
+    doc = docx.Document(io.BytesIO(raw))
+    lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+    if lines:
+        print(json.dumps([{"pageNumber": 1, "title": "Page 1", "paragraphs": lines}]))
+    else:
+        print(json.dumps([]))
+except Exception:
+    print(json.dumps([]))
+`;
+        const proc = spawnSync('python', ['-c', script], {
+          input: fileBase64,
+          encoding: 'utf-8',
+          maxBuffer: 25 * 1024 * 1024
+        });
+        const output = (proc.stdout || '').trim();
+        const jsonMatch = output.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            pages = parsed;
+            rawText = pages.map((p) => p.paragraphs.join('\n')).join('\n\n');
+          }
+        }
+      } catch (err: any) {
+        console.warn('[DOCX Parser] Extraction error:', err.message);
+      }
+    }
+
+    if (!rawText && textContent) {
+      rawText = textContent.trim();
+      const paras = rawText.split(/\r?\n\r?\n+/).map((p: string) => p.trim()).filter(Boolean);
+      pages = [{
+        pageNumber: 1,
+        title: 'Page 1',
+        paragraphs: paras.length > 0 ? paras : [rawText]
+      }];
+    }
+
+    if (!rawText || pages.length === 0) {
+      return res.status(422).json({
+        success: false,
+        error: {
+          code: 'UNEXTRACTABLE_DOCUMENT',
+          message: 'Unable to extract text from this document. Please ensure the file contains extractable digital text.'
+        },
+        requestId: (req as AppRequest).id
+      });
+    }
+
+    const sizeKb = Math.round((fileBase64 ? fileBase64.length * 0.75 : 1024) / 1024);
+    const sizeFormatted = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb || 1} KB`;
+
+    return res.json({
+      success: true,
+      data: {
+        title: cleanFilename,
+        sizeFormatted,
+        lastUpdated: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+        pages,
+        rawText
+      },
+      requestId: (req as AppRequest).id
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: { code: 'PARSE_ERROR', message: err.message || 'Failed to parse file.' },
+      requestId: (req as AppRequest).id
+    });
+  }
+};
+
+// -------------------------------------------------------------
+// 15. Reference-Style Adaptation (Requirement 4)
+// -------------------------------------------------------------
+export const extractReferenceStyle = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?._id?.toString();
+    const { referenceText, filename } = req.body;
+    if (!referenceText || !referenceText.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_INPUT', message: 'referenceText is required for style extraction.' },
+        requestId: (req as AppRequest).id
+      });
+    }
+
+    const orchestrationRes = await aiOrchestrator.executeTask({
+      taskType: 'REFERENCE_STYLE_ADAPTATION',
+      payload: { referenceText, filename }
+    });
+
+    let savedProfile = null;
+    if (orchestrationRes.success && orchestrationRes.data) {
+      const extracted = orchestrationRes.data;
+      const styleId = `style-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+      savedProfile = await ReferenceStyleProfile.create({
+        id: styleId,
+        userId: userId || undefined,
+        name: filename || extracted.styleName || `Style-${new Date().toLocaleDateString('en-GB')}`,
+        tone: extracted.tone || 'Formal Judicial',
+        structurePattern: extracted.clausePattern || 'Standard Clauses',
+        numberingFormat: extracted.numberingFormat || 'Sequential Numbers (1, 2, 3)',
+        clausePatterns: extracted.clausePattern ? [{ clauseType: 'General', observedStructure: extracted.clausePattern }] : [],
+        terminologyGlossary: extracted.terminologyGlossary || [],
+        sourceFilename: filename,
+        sampleSnippet: (referenceText || '').slice(0, 500)
+      });
+    }
+
+    res.json({
+      success: orchestrationRes.success,
+      data: {
+        ...orchestrationRes.data,
+        savedProfileId: (savedProfile as any)?._id || (savedProfile as any)?.id
+      },
+      requestId: (req as AppRequest).id
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'STYLE_EXTRACTION_ERROR', message: error.message || 'Failed to extract reference style.' },
+      requestId: (req as AppRequest).id
+    });
+  }
+};
+
+export const getReferenceStyles = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?._id?.toString();
+    const filter = userId ? { $or: [{ userId }, { userId: { $exists: false } }, { userId: null }] } : {};
+    const styles = await ReferenceStyleProfile.find(filter).sort({ createdAt: -1 }).limit(20);
+    res.json({
+      success: true,
+      data: styles,
+      requestId: (req as AppRequest).id
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'STYLE_FETCH_ERROR', message: error.message || 'Failed to retrieve reference styles.' },
+      requestId: (req as AppRequest).id
+    });
+  }
+};
+
+// -------------------------------------------------------------
+// 15. Universal Text-to-Speech (TTS) & User Speech Preferences
+// -------------------------------------------------------------
+export const getTtsPreferences = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?._id?.toString();
+    if (!userId) {
+      return res.json({
+        success: true,
+        data: {
+          voice: '',
+          rate: 1.0,
+          pitch: 1.0,
+          preferredLanguage: 'en-IN',
+          autoScrollHighlight: true,
+        },
+        requestId: (req as AppRequest).id,
+      });
+    }
+
+    const user = await User.findById(userId).select('ttsPreferences');
+    res.json({
+      success: true,
+      data: user?.ttsPreferences || {
+        voice: '',
+        rate: 1.0,
+        pitch: 1.0,
+        preferredLanguage: 'en-IN',
+        autoScrollHighlight: true,
+      },
+      requestId: (req as AppRequest).id,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'TTS_PREFERENCES_ERROR', message: error.message || 'Failed to fetch TTS preferences.' },
+      requestId: (req as AppRequest).id,
+    });
+  }
+};
+
+export const updateTtsPreferences = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?._id?.toString();
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required to save speech preferences.' },
+        requestId: (req as AppRequest).id,
+      });
+    }
+
+    const { voice, rate, pitch, preferredLanguage, autoScrollHighlight } = req.body;
+    const updateData: any = {};
+    if (typeof voice === 'string') updateData['ttsPreferences.voice'] = voice.trim();
+    if (typeof rate === 'number' && rate >= 0.5 && rate <= 2.5) updateData['ttsPreferences.rate'] = rate;
+    if (typeof pitch === 'number' && pitch >= 0.5 && pitch <= 2.0) updateData['ttsPreferences.pitch'] = pitch;
+    if (typeof preferredLanguage === 'string') updateData['ttsPreferences.preferredLanguage'] = preferredLanguage.trim();
+    if (typeof autoScrollHighlight === 'boolean') updateData['ttsPreferences.autoScrollHighlight'] = autoScrollHighlight;
+
+    const updatedUser = await User.findByIdAndUpdate(userId, { $set: updateData }, { new: true }).select('ttsPreferences');
+
+    res.json({
+      success: true,
+      data: updatedUser?.ttsPreferences,
+      message: 'Speech preferences saved successfully.',
+      requestId: (req as AppRequest).id,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'TTS_PREFERENCES_UPDATE_ERROR', message: error.message || 'Failed to update TTS preferences.' },
+      requestId: (req as AppRequest).id,
+    });
+  }
+};
+
+export const synthesizeTts = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { text, language = 'en-IN', voice, rate = 1.0 } = req.body;
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_INPUT', message: 'Text content is required for speech synthesis.' },
+        requestId: (req as AppRequest).id,
+      });
+    }
+
+    if (text.length > 25000) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'TEXT_TOO_LONG', message: 'Text exceeds maximum synthesis length of 25,000 characters. Please process in sections.' },
+        requestId: (req as AppRequest).id,
+      });
+    }
+
+    // Split text into smart legal chunk boundaries (clauses, paragraphs, sentences)
+    const paragraphs = text
+      .split(/\n{2,}|\r\n{2,}/)
+      .map(p => p.trim())
+      .filter(Boolean);
+
+    const chunks: string[] = [];
+    for (const paragraph of paragraphs) {
+      if (paragraph.length <= 280) {
+        chunks.push(paragraph);
+      } else {
+        const sentences = paragraph.split(/(?<=[.?!;])\s+(?=[A-Z0-9(])/).filter(Boolean);
+        let currentChunk = '';
+        for (const sent of sentences) {
+          if ((currentChunk + ' ' + sent).length <= 280) {
+            currentChunk = currentChunk ? currentChunk + ' ' + sent : sent;
+          } else {
+            if (currentChunk) chunks.push(currentChunk);
+            currentChunk = sent;
+          }
+        }
+        if (currentChunk) chunks.push(currentChunk);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        textLength: text.length,
+        language,
+        voice: voice || 'default',
+        rate,
+        totalParagraphs: paragraphs.length,
+        totalChunks: chunks.length,
+        chunks,
+        instructions: 'Client should synthesize sequential chunks using browser Web Speech API SpeechSynthesis or configured backend provider with cancellation hooks.',
+      },
+      requestId: (req as AppRequest).id,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'TTS_SYNTHESIS_ERROR', message: error.message || 'Speech synthesis preparation failed.' },
+      requestId: (req as AppRequest).id,
     });
   }
 };

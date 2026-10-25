@@ -20,7 +20,8 @@ import {
   Gavel,
   PenTool,
   Award,
-  Library
+  Library,
+  Info
 } from 'lucide-react';
 
 export interface NavSubItem {
@@ -112,6 +113,7 @@ export default function Sidebar({
         { name: 'Document Verification', icon: <Scale className="w-5 h-5" />, href: '/student/document-verification' },
         { name: 'Followed Cases', icon: <Briefcase className="w-5 h-5" />, href: '/student/case-tracker' },
         { name: 'Translation', icon: <Languages className="w-5 h-5" />, href: '/student/translation' },
+        { name: 'About Us', icon: <Info className="w-5 h-5" />, href: '/about' },
       ]
     : isCitizen
     ? [
@@ -132,6 +134,7 @@ export default function Sidebar({
         { name: 'Document Verification', icon: <Scale className="w-5 h-5" />, href: '/citizen/document-verification' },
         { name: 'My Cases', icon: <Briefcase className="w-5 h-5" />, href: '/citizen/case-tracker' },
         { name: 'Translation', icon: <Languages className="w-5 h-5" />, href: '/citizen/translation' },
+        { name: 'About Us', icon: <Info className="w-5 h-5" />, href: '/about' },
       ]
     : [
         { name: 'Dashboard', icon: <Home className="w-5 h-5" />, href: dashboardHref },
@@ -153,6 +156,7 @@ export default function Sidebar({
           ]
         },
         { name: 'Translation', icon: <Languages className="w-5 h-5" />, href: prefix ? `${prefix}/translation` : '/translation' },
+        { name: 'About Us', icon: <Info className="w-5 h-5" />, href: '/about' },
       ];
 
   const isSubItemActive = (child: NavSubItem) => {

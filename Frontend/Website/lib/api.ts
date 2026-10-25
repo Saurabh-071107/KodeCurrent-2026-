@@ -6,7 +6,7 @@ export interface ApiResponse<T = any> {
   data?: T;
   token?: string;
   user?: any;
-  error?: string;
+  error?: any;
   expiresInSeconds?: number;
   verified?: boolean;
 }
@@ -195,10 +195,51 @@ export const api = {
     templateId?: string;
     customInstructions?: string;
     jurisdiction?: string;
+    referenceStyle?: any;
+    existingClauses?: string[];
+    skillName?: string;
     isDemo?: boolean;
   }): Promise<ApiResponse> => {
     try {
       const res = await fetch(`${API_BASE_URL}/drafts/generate`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  extractReferenceStyle: async (payload: {
+    referenceText: string;
+    filename?: string;
+  }): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/documents/reference-style`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+
+
+  askResearchQuestion: async (payload: {
+    question: string;
+    context?: string;
+    searchMode?: string;
+    mode?: string;
+    threadId?: string;
+    isDemo?: boolean;
+  }): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/research/chat`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload),
@@ -275,17 +316,7 @@ export const api = {
     }
   },
 
-  // --- Bare Acts & Legal Library ---
-  getBareActs: async (): Promise<ApiResponse> => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/bare-acts`, {
-        headers: getAuthHeaders(),
-      });
-      return await res.json();
-    } catch (e: any) {
-      return { success: false, message: e.message };
-    }
-  },
+  // --- Legal Library ---
 
   getLibraryData: async (tab?: string): Promise<ApiResponse> => {
     try {
@@ -315,7 +346,43 @@ export const api = {
       const res = await fetch(`${API_BASE_URL}/verify`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ text, citations, isDemo: true }),
+        body: JSON.stringify({ text, citations }),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+  verifyCitations: async (text: string, citations?: any[]): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/verify`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ text, citations }),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+  parseDocumentFile: async (file: File): Promise<ApiResponse> => {
+    try {
+      const buffer = await file.arrayBuffer();
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const fileBase64 = typeof window !== 'undefined' ? window.btoa(binary) : Buffer.from(binary, 'binary').toString('base64');
+
+      const res = await fetch(`${API_BASE_URL}/documents/parse-file`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          filename: file.name,
+          fileBase64
+        }),
       });
       return await res.json();
     } catch (e: any) {
@@ -428,6 +495,241 @@ export const api = {
     }
   },
 
+  // --- NEXORA AI Case Strategy ---
+  askNexoraAi: async (payload: {
+    query: string;
+    matterContext?: string;
+    aiMode?: string;
+    discussionId?: string;
+  }): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/ai/nexora/chat`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  // --- BAR AI Bare Acts & Statutory Explanations ---
+  getBareActs: async (category?: string, q?: string): Promise<ApiResponse> => {
+    try {
+      const params = new URLSearchParams();
+      if (category && category !== 'All') params.append('category', category);
+      if (q) params.append('q', q);
+      const res = await fetch(`${API_BASE_URL}/bare-acts?${params.toString()}`, {
+        headers: getAuthHeaders(),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  searchBareActs: async (q?: string, category?: string): Promise<ApiResponse> => {
+    try {
+      const params = new URLSearchParams();
+      if (q) params.append('q', q);
+      if (category && category !== 'All') params.append('category', category);
+      const res = await fetch(`${API_BASE_URL}/bare-acts/search?${params.toString()}`, {
+        headers: getAuthHeaders(),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  explainBareAct: async (payload: {
+    query?: string;
+    actName?: string;
+    sectionNumber?: string;
+  }): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/bare-acts/explain`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  // --- AI Live Courtroom Engine (courtroom.ai Integration) ---
+  startCourtroomHearing: async (payload: {
+    topic: string;
+    userSide?: 'petitioner' | 'respondent';
+    difficulty?: string;
+    court?: string;
+    appearanceRole?: string;
+    scenarioId?: string;
+  }): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/courtroom/start`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  submitCourtroomArgument: async (sessionId: string, argument: string): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/courtroom/argument`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ sessionId, argument }),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  endCourtroomHearing: async (sessionId: string): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/courtroom/${encodeURIComponent(sessionId)}/end`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ sessionId }),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  getCourtroomHearing: async (sessionId: string): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/courtroom/${encodeURIComponent(sessionId)}`, {
+        headers: getAuthHeaders(),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  // --- AI Live Courtroom Simulation Turns ---
+  submitCourtroomTurn: async (
+    sessionId: string,
+    payload: {
+      argument: string;
+      scenario?: any;
+      court?: string;
+      difficulty?: string;
+      appearanceRole?: string;
+      turnHistory?: any[];
+    }
+  ): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/courtroom/sessions/${encodeURIComponent(sessionId)}/turns`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  // --- Exam & Moot Evaluation ---
+  submitExam: async (
+    testId: string,
+    payload: {
+      answers: Record<string, any>;
+      questions?: any[];
+    }
+  ): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/tests/${encodeURIComponent(testId)}/submit`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  // --- Combined Moot Memorial Lab Workflow ---
+  generateMootMemorial: async (payload: {
+    topic: string;
+    facts?: string;
+    side?: 'petitioner' | 'respondent';
+    jurisdiction?: string;
+  }): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/student/moot/generate`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  // --- Universal Text-to-Speech (TTS) & Preferences ---
+  getTtsPreferences: async (): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/user/preferences/tts`, {
+        headers: getAuthHeaders(),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  updateTtsPreferences: async (preferences: {
+    voice?: string;
+    rate?: number;
+    pitch?: number;
+    preferredLanguage?: string;
+    autoScrollHighlight?: boolean;
+  }): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/user/preferences/tts`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(preferences),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
+  synthesizeTts: async (payload: {
+    text: string;
+    language?: string;
+    voice?: string;
+    rate?: number;
+  }): Promise<ApiResponse> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/ai/tts/synthesize`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  },
+
   logout: async (): Promise<void> => {
     try {
       const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('draftmate_refresh_token') : null;
@@ -447,3 +749,4 @@ export const api = {
     }
   },
 };
+

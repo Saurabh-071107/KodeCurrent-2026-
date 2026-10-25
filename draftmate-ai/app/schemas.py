@@ -27,6 +27,9 @@ class Jurisdiction(str, Enum):
     UK = "uk"
     CA = "ca"
     AU = "au"
+    INDIA = "india"
+    IN_DELHI = "in_delhi"
+    IN_MUMBAI = "in_mumbai"
     OTHER = "other"
 
 
