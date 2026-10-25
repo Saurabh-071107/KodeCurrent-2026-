@@ -289,3 +289,23 @@ def extract_text_for_chunking(parsed_doc: ParsedDocument) -> List[Tuple[str, Dic
                 },
             ))
     return chunks
+
+
+def convert_to_markdown(file_path: Path) -> str:
+    """
+    Convert any supported document (PDF, DOCX, TXT, etc.) to structured Markdown using Microsoft MarkItDown.
+    Preserves tables, headers, statutory sections, and legal schedules.
+    """
+    try:
+        from markitdown import MarkItDown
+        md = MarkItDown()
+        result = md.convert(str(file_path))
+        if result and result.text_content:
+            logger.info("markitdown_conversion_success", filename=file_path.name, chars=len(result.text_content))
+            return result.text_content
+    except Exception as e:
+        logger.warning("markitdown_conversion_fallback", error=str(e), filename=file_path.name)
+
+    # Fallback to standard parser
+    parsed = parse_document(file_path)
+    return "\n\n".join(page.text for page in parsed.pages if page.text.strip())

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { VoiceDictation } from './voice/VoiceDictation';
 import {
   Search,
   Bell,
@@ -1562,13 +1563,10 @@ export default function DraftingStudio({
                     <ArrowUp className="w-3.5 h-3.5" />
                   </button>
 
-                  <button
-                    type="button"
-                    className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg transition-colors cursor-pointer"
-                    title="Voice Input"
-                  >
-                    <Mic className="w-4 h-4" />
-                  </button>
+                  <VoiceDictation
+                    onTranscript={(dictated) => setChatInput((prev) => prev + dictated)}
+                    buttonLabel="Voice"
+                  />
                 </form>
 
               </div>
